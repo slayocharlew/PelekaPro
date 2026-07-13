@@ -21,8 +21,10 @@ class DeliveryTrackingSession extends Model
     ];
 
     protected $casts = [
+        'status' => 'string',
         'started_at' => 'datetime',
         'stopped_at' => 'datetime',
+        'stop_reason' => 'string',
     ];
 
     public function delivery(): BelongsTo

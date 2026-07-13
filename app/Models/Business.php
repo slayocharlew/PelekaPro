@@ -27,6 +27,10 @@ class Business extends Model
         'status',
     ];
 
+    protected $casts = [
+        'status' => 'string',
+    ];
+
     public function branches(): HasMany
     {
         return $this->hasMany(BusinessBranch::class);

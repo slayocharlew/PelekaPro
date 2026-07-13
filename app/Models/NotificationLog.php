@@ -26,6 +26,8 @@ class NotificationLog extends Model
     ];
 
     protected $casts = [
+        'channel' => 'string',
+        'status' => 'string',
         'cost' => 'decimal:2',
         'sent_at' => 'datetime',
     ];

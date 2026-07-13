@@ -43,8 +43,55 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'status' => 'string',
             'last_login_at' => 'datetime',
         ];
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('super_admin');
+    }
+
+    public function isBusinessOwner(): bool
+    {
+        return $this->hasRole('business_owner');
+    }
+
+    public function isBusinessAdmin(): bool
+    {
+        return $this->hasRole('business_admin');
+    }
+
+    public function isDriver(): bool
+    {
+        return $this->hasRole('driver');
+    }
+
+    public function isCustomer(): bool
+    {
+        return $this->hasRole('customer');
+    }
+
+    public function belongsToBusiness(int|string|null $businessId): bool
+    {
+        return $businessId !== null
+            && $this->business_id !== null
+            && (string) $this->business_id === (string) $businessId;
+    }
+
+    public function canAccessBusiness(int|string|null $businessId): bool
+    {
+        return $this->isSuperAdmin() || $this->belongsToBusiness($businessId);
+    }
+
+    public function hasRole(string $roleName): bool
+    {
+        if ($this->relationLoaded('role')) {
+            return $this->role?->name === $roleName;
+        }
+
+        return $this->role()->where('name', $roleName)->exists();
     }
 
     public function business(): BelongsTo

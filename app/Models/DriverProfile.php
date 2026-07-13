@@ -24,7 +24,9 @@ class DriverProfile extends Model
     ];
 
     protected $casts = [
+        'vehicle_type' => 'string',
         'is_available' => 'boolean',
+        'current_status' => 'string',
     ];
 
     public function business(): BelongsTo

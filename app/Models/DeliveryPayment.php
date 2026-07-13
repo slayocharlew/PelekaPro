@@ -25,8 +25,10 @@ class DeliveryPayment extends Model
     ];
 
     protected $casts = [
+        'payment_method' => 'string',
         'expected_amount' => 'decimal:2',
         'collected_amount' => 'decimal:2',
+        'payment_status' => 'string',
         'collected_at' => 'datetime',
     ];
 

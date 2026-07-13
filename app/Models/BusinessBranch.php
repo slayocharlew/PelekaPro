@@ -29,6 +29,7 @@ class BusinessBranch extends Model
     protected $casts = [
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
+        'status' => 'string',
     ];
 
     public function business(): BelongsTo

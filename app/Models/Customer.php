@@ -21,6 +21,10 @@ class Customer extends Model
         'status',
     ];
 
+    protected $casts = [
+        'status' => 'string',
+    ];
+
     public function business(): BelongsTo
     {
         return $this->belongsTo(Business::class);

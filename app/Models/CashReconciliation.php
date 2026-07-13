@@ -29,6 +29,7 @@ class CashReconciliation extends Model
         'expected_cash' => 'decimal:2',
         'cash_returned' => 'decimal:2',
         'difference' => 'decimal:2',
+        'status' => 'string',
         'reconciled_at' => 'datetime',
     ];
 

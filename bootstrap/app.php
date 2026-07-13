@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\EnsureBusinessScope;
+use App\Http\Middleware\EnsureCustomerTrackingTokenAccess;
+use App\Http\Middleware\EnsureDriverAssignedDelivery;
+use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,7 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'role' => EnsureUserHasRole::class,
+            'business.scope' => EnsureBusinessScope::class,
+            'driver.delivery' => EnsureDriverAssignedDelivery::class,
+            'customer.tracking' => EnsureCustomerTrackingTokenAccess::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

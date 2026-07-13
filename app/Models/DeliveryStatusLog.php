@@ -18,6 +18,11 @@ class DeliveryStatusLog extends Model
         'note',
     ];
 
+    protected $casts = [
+        'from_status' => 'string',
+        'to_status' => 'string',
+    ];
+
     public function delivery(): BelongsTo
     {
         return $this->belongsTo(Delivery::class);

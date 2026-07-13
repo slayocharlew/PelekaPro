@@ -50,10 +50,12 @@ class Delivery extends Model
     ];
 
     protected $casts = [
+        'status' => 'string',
         'pickup_latitude' => 'decimal:7',
         'pickup_longitude' => 'decimal:7',
         'dropoff_latitude' => 'decimal:7',
         'dropoff_longitude' => 'decimal:7',
+        'payment_method' => 'string',
         'amount_to_collect' => 'decimal:2',
         'delivery_fee' => 'decimal:2',
         'customer_location_confirmed_at' => 'datetime',

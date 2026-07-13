@@ -10,7 +10,11 @@ class DeliveryPolicy
 {
     public function before(User $user, string $ability): ?bool
     {
-        return $user->isSuperAdmin() ? true : null;
+        if ($user->isSuperAdmin() && $ability !== 'viewAssignedAsDriver') {
+            return true;
+        }
+
+        return null;
     }
 
     public function viewAny(User $user): bool
@@ -56,5 +60,21 @@ class DeliveryPolicy
     public function cancel(User $user, Delivery $delivery): bool
     {
         return $this->update($user, $delivery);
+    }
+
+    public function assignDriver(User $user, Delivery $delivery): bool
+    {
+        return ($user->isBusinessOwner() || $user->isBusinessAdmin())
+            && $user->belongsToBusiness($delivery->business_id);
+    }
+
+    public function unassignDriver(User $user, Delivery $delivery): bool
+    {
+        return $this->assignDriver($user, $delivery);
+    }
+
+    public function viewAssignedAsDriver(User $user): bool
+    {
+        return $user->isDriver();
     }
 }

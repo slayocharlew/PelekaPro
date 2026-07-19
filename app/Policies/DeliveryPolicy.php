@@ -102,6 +102,20 @@ class DeliveryPolicy
         return $this->complete($user, $delivery);
     }
 
+    public function recordLocation(User $user, Delivery $delivery): bool
+    {
+        return $this->isAssignedBusinessDriver($user, $delivery);
+    }
+
+    public function viewTrackingLocations(User $user, Delivery $delivery): bool
+    {
+        if ($user->isBusinessOwner() || $user->isBusinessAdmin()) {
+            return $user->belongsToBusiness($delivery->business_id);
+        }
+
+        return $this->isAssignedBusinessDriver($user, $delivery);
+    }
+
     private function isAssignedBusinessDriver(User $user, Delivery $delivery): bool
     {
         return $user->isDriver()

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\DeliveryDriverController;
 use App\Http\Controllers\Api\DriverDeliveryWorkflowController;
 use App\Http\Controllers\Api\DriverController;
+use App\Http\Controllers\Api\DriverLocationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
@@ -24,6 +25,13 @@ Route::middleware('auth')->group(function (): void {
 
     Route::post('driver/deliveries/{delivery}/fail', [DriverDeliveryWorkflowController::class, 'fail'])
         ->name('driver.deliveries.fail');
+
+    Route::post('driver/deliveries/{delivery}/locations', [DriverLocationController::class, 'store'])
+        ->middleware('throttle:driver-locations')
+        ->name('driver.deliveries.locations.store');
+
+    Route::get('deliveries/{delivery}/tracking-locations', [DriverLocationController::class, 'history'])
+        ->name('deliveries.tracking-locations.index');
 
     Route::post('deliveries/{delivery}/assign-driver', [DeliveryDriverController::class, 'assign'])
         ->name('deliveries.assign-driver');

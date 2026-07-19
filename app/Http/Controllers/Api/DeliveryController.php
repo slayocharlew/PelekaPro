@@ -12,6 +12,7 @@ use App\Models\Delivery;
 use App\Models\DeliveryPayment;
 use App\Models\User;
 use App\Services\DeliveryNumberService;
+use App\Services\DeliveryWorkflowService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -216,7 +217,7 @@ class DeliveryController extends Controller
         return $this->success('Delivery deleted successfully');
     }
 
-    public function cancel(Request $request, Delivery $delivery): JsonResponse
+    public function cancel(Request $request, Delivery $delivery, DeliveryWorkflowService $workflowService): JsonResponse
     {
         if (Gate::denies('cancel', $delivery)) {
             return $this->error('You are not allowed to cancel this delivery.', 403);
@@ -234,7 +235,7 @@ class DeliveryController extends Controller
             return $this->error('Delivered, failed, or already cancelled deliveries cannot be cancelled.', 422);
         }
 
-        DB::transaction(function () use ($delivery, $request): void {
+        DB::transaction(function () use ($delivery, $request, $workflowService): void {
             $fromStatus = $delivery->status;
 
             $delivery->forceFill([
@@ -242,14 +243,7 @@ class DeliveryController extends Controller
                 'cancelled_at' => now(),
             ])->save();
 
-            $delivery->trackingSessions()
-                ->where('status', 'active')
-                ->update([
-                    'status' => 'stopped',
-                    'stopped_at' => now(),
-                    'stop_reason' => 'cancelled',
-                    'updated_at' => now(),
-                ]);
+            $workflowService->closeActiveSessionsForCancellation($delivery);
 
             $this->logStatusChange(
                 $delivery,

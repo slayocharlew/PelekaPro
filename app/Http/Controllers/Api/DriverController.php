@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\DeliveryResource;
+use App\Http\Resources\DriverDeliveryResource;
 use App\Http\Resources\DriverResource;
 use App\Models\Delivery;
 use App\Models\User;
@@ -75,22 +75,16 @@ class DriverController extends Controller
 
         $deliveries = Delivery::query()
             ->with([
-                'business',
-                'branch',
                 'customer',
                 'customerAddress',
-                'assignedDriver',
                 'items',
-                'statusLogs.changedBy',
                 'payment',
-                'proof',
-                'failure.failedDeliveryReason',
             ])
             ->where('assigned_driver_id', $user->getKey())
             ->latest()
             ->get();
 
-        return $this->success('Assigned deliveries retrieved successfully', DeliveryResource::collection($deliveries));
+        return $this->success('Assigned deliveries retrieved successfully', DriverDeliveryResource::collection($deliveries));
     }
 
     private function success(string $message, mixed $data = null, int $status = 200): JsonResponse

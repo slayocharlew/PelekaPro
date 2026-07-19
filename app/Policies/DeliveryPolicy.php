@@ -10,7 +10,7 @@ class DeliveryPolicy
 {
     public function before(User $user, string $ability): ?bool
     {
-        if ($user->isSuperAdmin() && $ability !== 'viewAssignedAsDriver') {
+        if ($user->isSuperAdmin() && ! in_array($ability, ['viewAssignedAsDriver', 'viewAssigned', 'start', 'complete', 'fail'], true)) {
             return true;
         }
 
@@ -76,5 +76,36 @@ class DeliveryPolicy
     public function viewAssignedAsDriver(User $user): bool
     {
         return $user->isDriver();
+    }
+
+    public function viewAssigned(User $user, Delivery $delivery): bool
+    {
+        return $this->isAssignedBusinessDriver($user, $delivery);
+    }
+
+    public function start(User $user, Delivery $delivery): bool
+    {
+        return $this->isAssignedBusinessDriver($user, $delivery)
+            && $delivery->started_at === null
+            && in_array($delivery->status, ['assigned', 'accepted'], true);
+    }
+
+    public function complete(User $user, Delivery $delivery): bool
+    {
+        return $this->isAssignedBusinessDriver($user, $delivery)
+            && $delivery->started_at !== null
+            && in_array($delivery->status, ['on_the_way', 'arrived'], true);
+    }
+
+    public function fail(User $user, Delivery $delivery): bool
+    {
+        return $this->complete($user, $delivery);
+    }
+
+    private function isAssignedBusinessDriver(User $user, Delivery $delivery): bool
+    {
+        return $user->isDriver()
+            && (string) $delivery->assigned_driver_id === (string) $user->getKey()
+            && (string) $delivery->business_id === (string) $user->business_id;
     }
 }

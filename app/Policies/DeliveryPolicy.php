@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Models\Customer;
 use App\Models\Delivery;
 use App\Models\User;
 
@@ -10,7 +9,7 @@ class DeliveryPolicy
 {
     public function before(User $user, string $ability): ?bool
     {
-        if ($user->isSuperAdmin() && ! in_array($ability, ['viewAssignedAsDriver', 'viewAssigned', 'start', 'complete', 'fail'], true)) {
+        if ($user->isSuperAdmin() && ! in_array($ability, ['viewAssignedAsDriver', 'viewAssigned', 'start', 'complete', 'fail', 'recordLocation'], true)) {
             return true;
         }
 
@@ -20,25 +19,13 @@ class DeliveryPolicy
     public function viewAny(User $user): bool
     {
         return $user->isBusinessOwner()
-            || $user->isBusinessAdmin()
-            || $user->isDriver()
-            || $user->isCustomer();
+            || $user->isBusinessAdmin();
     }
 
     public function view(User $user, Delivery $delivery): bool
     {
-        if (($user->isBusinessOwner() || $user->isBusinessAdmin()) && $user->belongsToBusiness($delivery->business_id)) {
-            return true;
-        }
-
-        if ($user->isDriver() && (string) $delivery->assigned_driver_id === (string) $user->getKey()) {
-            return true;
-        }
-
-        return $user->isCustomer() && Customer::query()
-            ->whereKey($delivery->customer_id)
-            ->where('user_id', $user->getKey())
-            ->exists();
+        return ($user->isBusinessOwner() || $user->isBusinessAdmin())
+            && $user->belongsToBusiness($delivery->business_id);
     }
 
     public function create(User $user): bool

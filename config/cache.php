@@ -84,6 +84,12 @@ return [
             'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
         ],
 
+        'pelekapro_live' => [
+            'driver' => 'redis',
+            'connection' => env('PELEKAPRO_LIVE_REDIS_CONNECTION', 'cache'),
+            'lock_connection' => env('PELEKAPRO_LIVE_REDIS_CONNECTION', 'cache'),
+        ],
+
         'dynamodb' => [
             'driver' => 'dynamodb',
             'key' => env('AWS_ACCESS_KEY_ID'),

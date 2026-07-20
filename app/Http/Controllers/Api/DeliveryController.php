@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\DeliveryWorkflowException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDeliveryRequest;
 use App\Http\Requests\UpdateDeliveryRequest;
@@ -231,28 +232,41 @@ class DeliveryController extends Controller
             return $this->validationError($validator);
         }
 
-        if (in_array($delivery->status, ['delivered', 'failed', 'cancelled'], true)) {
-            return $this->error('Delivered, failed, or already cancelled deliveries cannot be cancelled.', 422);
+        try {
+            $delivery = DB::transaction(function () use ($delivery, $request, $workflowService): Delivery {
+                $lockedDelivery = Delivery::query()
+                    ->whereKey($delivery->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if (in_array($lockedDelivery->status, ['delivered', 'failed', 'cancelled'], true)) {
+                    throw new DeliveryWorkflowException('Delivered, failed, or already cancelled deliveries cannot be cancelled.', 422);
+                }
+
+                $fromStatus = $lockedDelivery->status;
+
+                $lockedDelivery->forceFill([
+                    'status' => 'cancelled',
+                    'cancelled_at' => now(),
+                ])->save();
+
+                $workflowService->closeActiveSessionsForCancellation($lockedDelivery);
+
+                $this->logStatusChange(
+                    $lockedDelivery,
+                    $fromStatus,
+                    'cancelled',
+                    $request->user(),
+                    $request->input('note', 'Delivery cancelled')
+                );
+
+                return $lockedDelivery->refresh();
+            });
+        } catch (DeliveryWorkflowException $exception) {
+            return $this->error($exception->getMessage(), $exception->statusCode());
         }
 
-        DB::transaction(function () use ($delivery, $request, $workflowService): void {
-            $fromStatus = $delivery->status;
-
-            $delivery->forceFill([
-                'status' => 'cancelled',
-                'cancelled_at' => now(),
-            ])->save();
-
-            $workflowService->closeActiveSessionsForCancellation($delivery);
-
-            $this->logStatusChange(
-                $delivery,
-                $fromStatus,
-                'cancelled',
-                $request->user(),
-                $request->input('note', 'Delivery cancelled')
-            );
-        });
+        $workflowService->forgetLiveLocation($delivery);
 
         $delivery->load($this->deliveryRelations());
 

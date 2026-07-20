@@ -23,6 +23,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('auth-login', function (Request $request) {
+            $phone = mb_strtolower((string) $request->input('phone', ''));
+
+            return Limit::perMinute(5)
+                ->by(hash('sha256', $phone.'|'.$request->ip()))
+                ->response(fn () => response()->json([
+                    'success' => false,
+                    'message' => 'Too many login attempts. Please try again later.',
+                ], 429));
+        });
+
         RateLimiter::for('driver-locations', function (Request $request) {
             $delivery = $request->route('delivery');
             $deliveryId = $delivery instanceof Model ? $delivery->getKey() : $delivery;

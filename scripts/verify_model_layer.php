@@ -1,5 +1,26 @@
 <?php
 
+use App\Models\Business;
+use App\Models\BusinessBranch;
+use App\Models\CashReconciliation;
+use App\Models\CashReconciliationItem;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
+use App\Models\Delivery;
+use App\Models\DeliveryFailure;
+use App\Models\DeliveryItem;
+use App\Models\DeliveryPayment;
+use App\Models\DeliveryProof;
+use App\Models\DeliveryStatusLog;
+use App\Models\DeliveryTrackingLocation;
+use App\Models\DeliveryTrackingSession;
+use App\Models\DriverProfile;
+use App\Models\FailedDeliveryReason;
+use App\Models\NotificationLog;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,29 +33,29 @@ use Illuminate\Support\Facades\Schema;
 require __DIR__.'/../vendor/autoload.php';
 
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
 $models = [
-    App\Models\Role::class,
-    App\Models\Permission::class,
-    App\Models\Business::class,
-    App\Models\BusinessBranch::class,
-    App\Models\User::class,
-    App\Models\Customer::class,
-    App\Models\CustomerAddress::class,
-    App\Models\DriverProfile::class,
-    App\Models\Delivery::class,
-    App\Models\DeliveryItem::class,
-    App\Models\DeliveryStatusLog::class,
-    App\Models\DeliveryTrackingSession::class,
-    App\Models\DeliveryTrackingLocation::class,
-    App\Models\DeliveryProof::class,
-    App\Models\FailedDeliveryReason::class,
-    App\Models\DeliveryFailure::class,
-    App\Models\DeliveryPayment::class,
-    App\Models\CashReconciliation::class,
-    App\Models\CashReconciliationItem::class,
-    App\Models\NotificationLog::class,
+    Role::class,
+    Permission::class,
+    Business::class,
+    BusinessBranch::class,
+    User::class,
+    Customer::class,
+    CustomerAddress::class,
+    DriverProfile::class,
+    Delivery::class,
+    DeliveryItem::class,
+    DeliveryStatusLog::class,
+    DeliveryTrackingSession::class,
+    DeliveryTrackingLocation::class,
+    DeliveryProof::class,
+    FailedDeliveryReason::class,
+    DeliveryFailure::class,
+    DeliveryPayment::class,
+    CashReconciliation::class,
+    CashReconciliationItem::class,
+    NotificationLog::class,
 ];
 
 $ignoreFillable = ['id', 'created_at', 'updated_at', 'deleted_at', 'remember_token'];
@@ -137,6 +158,7 @@ foreach ($models as $class) {
 
             if (! Schema::hasTable($pivotTable)) {
                 $issues[] = $relationName.' pivot table missing: '.$pivotTable;
+
                 continue;
             }
 

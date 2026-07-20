@@ -324,6 +324,129 @@ class DriverDeliveryWorkflowApiTest extends TestCase
             ->count());
     }
 
+    public function test_partial_cash_collection_remains_partial(): void
+    {
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->activeDeliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'delivery_pin' => '123456',
+                'collected_amount' => 3000,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('delivery_payments', [
+            'delivery_id' => $delivery->id,
+            'driver_id' => $driver->id,
+            'expected_amount' => 5000,
+            'collected_amount' => 3000,
+            'payment_status' => 'partial',
+        ]);
+    }
+
+    public function test_prepaid_delivery_does_not_require_or_record_collection(): void
+    {
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->activeDeliveryFor($business, $driver);
+        $delivery->forceFill([
+            'payment_method' => 'prepaid',
+            'amount_to_collect' => 0,
+        ])->save();
+        $delivery->payment()->update([
+            'payment_method' => 'prepaid',
+            'expected_amount' => 0,
+            'collected_amount' => 0,
+            'payment_status' => 'not_required',
+            'collected_at' => null,
+        ]);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'delivery_pin' => '123456',
+            ])
+            ->assertOk();
+
+        $payment = $delivery->payment()->firstOrFail();
+
+        $this->assertSame('prepaid', $payment->payment_method);
+        $this->assertSame('not_required', $payment->payment_status);
+        $this->assertSame('0.00', $payment->collected_amount);
+        $this->assertNull($payment->collected_at);
+    }
+
+    public function test_driver_cannot_override_authoritative_payment_method(): void
+    {
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->activeDeliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'delivery_pin' => '123456',
+                'payment_method' => 'none',
+                'collected_amount' => 5000,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('payment_method');
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $delivery->id,
+            'status' => 'on_the_way',
+        ]);
+        $this->assertDatabaseHas('delivery_payments', [
+            'delivery_id' => $delivery->id,
+            'payment_method' => 'cash',
+            'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_over_collection_is_recorded_without_changing_expected_amount(): void
+    {
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->activeDeliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'delivery_pin' => '123456',
+                'collected_amount' => 6000,
+                'expected_amount' => 1,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('delivery_payments', [
+            'delivery_id' => $delivery->id,
+            'expected_amount' => 5000,
+            'collected_amount' => 6000,
+            'payment_status' => 'collected',
+        ]);
+    }
+
+    public function test_another_driver_cannot_record_collection(): void
+    {
+        $business = $this->business();
+        $assignedDriver = $this->driver($business);
+        $otherDriver = $this->driver($business);
+        $delivery = $this->activeDeliveryFor($business, $assignedDriver);
+
+        $this->actingAs($otherDriver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'delivery_pin' => '123456',
+                'collected_amount' => 5000,
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('delivery_payments', [
+            'delivery_id' => $delivery->id,
+            'driver_id' => $assignedDriver->id,
+            'collected_amount' => 0,
+            'payment_status' => 'pending',
+        ]);
+    }
+
     private function role(string $name): Role
     {
         return Role::query()->firstOrCreate(

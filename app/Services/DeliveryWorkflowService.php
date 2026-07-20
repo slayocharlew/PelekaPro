@@ -9,6 +9,7 @@ use App\Models\DeliveryTrackingSession;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -16,8 +17,12 @@ use Throwable;
 class DeliveryWorkflowService
 {
     private const STARTABLE_STATUSES = ['assigned', 'accepted'];
+
     private const IN_PROGRESS_STATUSES = ['on_the_way', 'arrived'];
+
     private const TERMINAL_STATUSES = ['delivered', 'failed', 'cancelled'];
+
+    public function __construct(private readonly LiveDeliveryLocationStore $liveLocationStore) {}
 
     public function start(Delivery $delivery, User $driver): Delivery
     {
@@ -68,7 +73,7 @@ class DeliveryWorkflowService
         $storedProofPath = $this->storeProofFile($payload['proof_file'] ?? null, 'delivery-proofs');
 
         try {
-            return DB::transaction(function () use ($delivery, $driver, $payload, $storedProofPath): Delivery {
+            $completedDelivery = DB::transaction(function () use ($delivery, $driver, $payload, $storedProofPath): Delivery {
                 $lockedDelivery = $this->lockDelivery($delivery);
                 $this->assertAssignedDriver($lockedDelivery, $driver);
                 $this->assertDriverProfileActive($driver);
@@ -122,6 +127,10 @@ class DeliveryWorkflowService
 
             throw $throwable;
         }
+
+        $this->forgetLiveLocation($completedDelivery);
+
+        return $completedDelivery;
     }
 
     /**
@@ -132,7 +141,7 @@ class DeliveryWorkflowService
         $storedProofPath = $this->storeProofFile($payload['proof_file'] ?? null, 'delivery-failures');
 
         try {
-            return DB::transaction(function () use ($delivery, $driver, $payload, $storedProofPath): Delivery {
+            $failedDelivery = DB::transaction(function () use ($delivery, $driver, $payload, $storedProofPath): Delivery {
                 $lockedDelivery = $this->lockDelivery($delivery);
                 $this->assertAssignedDriver($lockedDelivery, $driver);
                 $this->assertDriverProfileActive($driver);
@@ -170,6 +179,10 @@ class DeliveryWorkflowService
 
             throw $throwable;
         }
+
+        $this->forgetLiveLocation($failedDelivery);
+
+        return $failedDelivery;
     }
 
     public function closeActiveSessionsForCancellation(Delivery $delivery): int
@@ -182,6 +195,18 @@ class DeliveryWorkflowService
                 'stop_reason' => 'cancelled',
                 'updated_at' => now(),
             ]);
+    }
+
+    public function forgetLiveLocation(Delivery $delivery): void
+    {
+        try {
+            $this->liveLocationStore->forgetForDelivery($delivery);
+        } catch (Throwable $throwable) {
+            Log::warning('Unable to remove Redis live delivery location.', [
+                'delivery_id' => $delivery->getKey(),
+                'exception_type' => $throwable::class,
+            ]);
+        }
     }
 
     private function lockDelivery(Delivery $delivery): Delivery
@@ -252,10 +277,13 @@ class DeliveryWorkflowService
     {
         $payment = DeliveryPayment::query()->firstOrNew(['delivery_id' => $delivery->getKey()]);
         $expectedAmount = (float) ($payment->exists ? $payment->expected_amount : $delivery->amount_to_collect);
-        $paymentMethod = $payload['payment_method'] ?? ($payment->payment_method ?: $this->paymentMethodFor($delivery->payment_method));
+        $paymentMethod = $payment->exists
+            ? $payment->payment_method
+            : $this->paymentMethodFor($delivery->payment_method);
         $collectedAmount = array_key_exists('collected_amount', $payload)
             ? (float) $payload['collected_amount']
             : (float) ($payment->collected_amount ?? 0);
+        $paymentStatus = $this->paymentStatusFor($paymentMethod, $expectedAmount, $collectedAmount);
 
         $payment->fill([
             'business_id' => $delivery->business_id,
@@ -263,10 +291,10 @@ class DeliveryWorkflowService
             'payment_method' => $paymentMethod,
             'expected_amount' => $expectedAmount,
             'collected_amount' => $collectedAmount,
-            'payment_status' => $this->paymentStatusFor($paymentMethod, $expectedAmount, $collectedAmount),
+            'payment_status' => $paymentStatus,
             'reference_number' => $payload['payment_reference'] ?? $payment->reference_number,
             'note' => $payload['note'] ?? $payment->note,
-            'collected_at' => $collectedAt,
+            'collected_at' => $paymentStatus === 'not_required' ? $payment->collected_at : $collectedAt,
         ]);
 
         if (! $payment->exists) {

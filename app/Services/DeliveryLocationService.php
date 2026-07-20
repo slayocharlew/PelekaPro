@@ -9,10 +9,14 @@ use App\Models\DeliveryTrackingSession;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class DeliveryLocationService
 {
     private const ACTIVE_STATUSES = ['on_the_way', 'arrived'];
+
+    public function __construct(private readonly LiveDeliveryLocationStore $liveLocationStore) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -20,7 +24,7 @@ class DeliveryLocationService
      */
     public function record(Delivery $delivery, User $driver, array $payload): array
     {
-        return DB::transaction(function () use ($delivery, $driver, $payload): array {
+        [$location, $created, $lockedDelivery, $activeSession] = DB::transaction(function () use ($delivery, $driver, $payload): array {
             $lockedDelivery = Delivery::query()
                 ->whereKey($delivery->getKey())
                 ->lockForUpdate()
@@ -29,6 +33,11 @@ class DeliveryLocationService
             $this->assertCanRecordLocation($lockedDelivery, $driver);
             $activeSession = $this->activeSession($lockedDelivery, $driver);
             $recordedAt = Carbon::parse($payload['recorded_at']);
+
+            if ($activeSession->started_at === null || $recordedAt->lessThan($activeSession->started_at)) {
+                throw new DeliveryWorkflowException('Location timestamp is before the active tracking session.', 422);
+            }
+
             $latitude = number_format((float) $payload['latitude'], 7, '.', '');
             $longitude = number_format((float) $payload['longitude'], 7, '.', '');
 
@@ -42,7 +51,7 @@ class DeliveryLocationService
                 ->first();
 
             if ($duplicate) {
-                return [$duplicate, false];
+                return [$duplicate, false, $lockedDelivery, $activeSession];
             }
 
             $location = DeliveryTrackingLocation::query()->create([
@@ -58,8 +67,20 @@ class DeliveryLocationService
                 'recorded_at' => $recordedAt,
             ]);
 
-            return [$location, true];
+            return [$location, true, $lockedDelivery, $activeSession];
         });
+
+        try {
+            $this->liveLocationStore->storeLatest($lockedDelivery, $activeSession, $location);
+        } catch (Throwable) {
+            Log::warning('Unable to update Redis live delivery location.', [
+                'delivery_id' => $lockedDelivery->getKey(),
+                'tracking_session_id' => $activeSession->getKey(),
+                'location_id' => $location->getKey(),
+            ]);
+        }
+
+        return [$location, $created];
     }
 
     private function assertCanRecordLocation(Delivery $delivery, User $driver): void

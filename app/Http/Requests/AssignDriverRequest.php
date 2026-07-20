@@ -58,11 +58,19 @@ class AssignDriverRequest extends FormRequest
                 $validator->errors()->add('driver_id', 'The selected driver is not active.');
             }
 
-            if (! $this->hasDriverRoleOrProfile($driver)) {
+            if ($driver->role?->name !== 'driver') {
                 $validator->errors()->add('driver_id', 'The selected user is not a driver.');
+
+                return;
             }
 
-            if ($driver->driverProfile && (! $driver->driverProfile->is_available || $driver->driverProfile->current_status !== 'available')) {
+            if (! $driver->driverProfile || (string) $driver->driverProfile->business_id !== (string) $delivery->business_id) {
+                $validator->errors()->add('driver_id', 'The selected driver does not have an active profile for this business.');
+
+                return;
+            }
+
+            if (! $driver->driverProfile->is_available || $driver->driverProfile->current_status !== 'available') {
                 $validator->errors()->add('driver_id', 'The selected driver is not available.');
             }
         });
@@ -83,10 +91,5 @@ class AssignDriverRequest extends FormRequest
             'success' => false,
             'message' => 'You are not allowed to assign drivers to this delivery.',
         ], 403));
-    }
-
-    private function hasDriverRoleOrProfile(User $driver): bool
-    {
-        return $driver->role?->name === 'driver' || $driver->driverProfile !== null;
     }
 }

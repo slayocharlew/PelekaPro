@@ -43,17 +43,12 @@ class DriverController extends Controller
             ->with('driverProfile')
             ->where('status', 'active')
             ->when($businessId, fn (Builder $query, int|string $businessId) => $query->where('business_id', $businessId))
-            ->where(function (Builder $query): void {
-                $query->whereHas('role', fn (Builder $roleQuery) => $roleQuery->where('name', 'driver'))
-                    ->orWhereHas('driverProfile');
-            })
-            ->where(function (Builder $query): void {
-                $query->whereDoesntHave('driverProfile')
-                    ->orWhereHas('driverProfile', function (Builder $profileQuery): void {
-                        $profileQuery
-                            ->where('is_available', true)
-                            ->where('current_status', 'available');
-                    });
+            ->whereHas('role', fn (Builder $roleQuery) => $roleQuery->where('name', 'driver'))
+            ->whereHas('driverProfile', function (Builder $profileQuery) use ($businessId): void {
+                $profileQuery
+                    ->when($businessId, fn (Builder $query, int|string $businessId) => $query->where('business_id', $businessId))
+                    ->where('is_available', true)
+                    ->where('current_status', 'available');
             })
             ->orderBy('name')
             ->get();

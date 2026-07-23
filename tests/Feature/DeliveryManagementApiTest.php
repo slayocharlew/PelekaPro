@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Delivery;
 use App\Models\DeliveryPayment;
+use App\Models\DriverProfile;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -198,7 +199,7 @@ class DeliveryManagementApiTest extends TestCase
 
     private function userWithRole(string $roleName, ?Business $business = null): User
     {
-        return User::query()->create([
+        $user = User::query()->create([
             'business_id' => $business?->id,
             'role_id' => $this->role($roleName)->id,
             'name' => Str::headline($roleName).' User',
@@ -207,6 +208,18 @@ class DeliveryManagementApiTest extends TestCase
             'password' => 'password',
             'status' => 'active',
         ]);
+
+        if ($roleName === 'driver' && $business) {
+            DriverProfile::query()->create([
+                'business_id' => $business->id,
+                'user_id' => $user->id,
+                'vehicle_type' => 'bodaboda',
+                'is_available' => true,
+                'current_status' => 'available',
+            ]);
+        }
+
+        return $user;
     }
 
     private function customer(Business $business, ?User $user = null): Customer

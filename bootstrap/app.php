@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureActiveApiUser;
 use App\Http\Middleware\EnsureBusinessScope;
 use App\Http\Middleware\EnsureCustomerTrackingTokenAccess;
 use App\Http\Middleware\EnsureDriverAssignedDelivery;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
+            'active.api.user' => EnsureActiveApiUser::class,
             'role' => EnsureUserHasRole::class,
             'business.scope' => EnsureBusinessScope::class,
             'driver.delivery' => EnsureDriverAssignedDelivery::class,

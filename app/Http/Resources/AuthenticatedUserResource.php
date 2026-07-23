@@ -14,26 +14,21 @@ class AuthenticatedUserResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'business_id' => $this->business_id,
+            'branch_id' => $this->branch_id,
             'name' => $this->name,
             'phone' => $this->phone,
             'email' => $this->email,
             'status' => $this->status,
-            'role' => $this->whenLoaded('role', fn () => $this->role ? [
-                'id' => $this->role->id,
-                'name' => $this->role->name,
-                'display_name' => $this->role->display_name,
-            ] : null),
-            'business' => $this->whenLoaded('business', fn () => $this->business ? [
-                'id' => $this->business->id,
-                'name' => $this->business->name,
-                'business_code' => $this->business->business_code,
-                'status' => $this->business->status,
-            ] : null),
-            'branch' => $this->whenLoaded('branch', fn () => $this->branch ? [
-                'id' => $this->branch->id,
-                'name' => $this->branch->name,
-                'status' => $this->branch->status,
-            ] : null),
+            'role' => $this->role?->name,
+            'driver_profile' => $this->when(
+                $this->role?->name === 'driver',
+                fn (): ?array => $this->driverProfile ? [
+                    'id' => $this->driverProfile->id,
+                    'is_available' => $this->driverProfile->is_available,
+                    'current_status' => $this->driverProfile->current_status,
+                ] : null,
+            ),
         ];
     }
 }

@@ -50,17 +50,17 @@ class ApiSecurityAndDriverIdentityTest extends TestCase
         $this->actingAs($inactiveOwner)
             ->getJson('/api/deliveries')
             ->assertForbidden()
-            ->assertJsonPath('message', 'This account is not active.');
+            ->assertJsonPath('message', 'This account is not permitted to access the API.');
 
         $this->actingAs($softDeletedOwner)
             ->getJson('/api/deliveries')
             ->assertForbidden()
-            ->assertJsonPath('message', 'This account is not active.');
+            ->assertJsonPath('message', 'This account is not permitted to access the API.');
 
         $this->actingAs($suspendedDriver)
             ->getJson('/api/driver/deliveries')
             ->assertForbidden()
-            ->assertJsonPath('message', 'This driver profile is not active.');
+            ->assertJsonPath('message', 'This account is not permitted to access the API.');
     }
 
     public function test_unrelated_driver_profile_cannot_claim_delivery_identity(): void

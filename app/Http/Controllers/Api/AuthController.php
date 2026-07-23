@@ -6,78 +6,83 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Resources\AuthenticatedUserResource;
 use App\Models\User;
+use App\Services\ApiUserEligibility;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
-    public function login(LoginRequest $request): JsonResponse
+    public function login(LoginRequest $request, ApiUserEligibility $eligibility): JsonResponse
     {
-        $user = User::query()
-            ->with(['role', 'business', 'branch', 'driverProfile'])
-            ->where('phone', $request->validated('phone'))
-            ->first();
+        $validated = $request->validated();
+        $user = $this->findUser($validated);
 
-        if (! $user || ! is_string($user->password) || ! Hash::check($request->validated('password'), $user->password)) {
-            return $this->error('The provided credentials are invalid.', 422);
-        }
-
-        if ($user->status !== 'active') {
-            return $this->error('This account is not active.', 403);
-        }
-
-        if ($user->isDriver() && (! $user->driverProfile
-            || $user->driverProfile->trashed()
-            || $user->driverProfile->current_status === 'suspended')) {
-            return $this->error('This driver profile is not active.', 403);
+        if (! $user
+            || ! is_string($user->password)
+            || ! Hash::check($validated['password'], $user->password)
+            || ! $eligibility->allows($user)
+        ) {
+            return $this->invalidCredentialsResponse();
         }
 
         $expirationMinutes = max(1, (int) config('sanctum.expiration', 43200));
         $tokenName = $user->isDriver() ? 'flutter-driver' : 'pelekapro-api';
         $abilities = $user->isDriver() ? ['driver-api'] : ['api'];
-        $token = $user->createToken($tokenName, $abilities, now()->addMinutes($expirationMinutes));
 
-        $user->forceFill(['last_login_at' => now()])->save();
+        $newAccessToken = DB::transaction(function () use ($user, $tokenName, $abilities, $expirationMinutes) {
+            $user->forceFill(['last_login_at' => now()])->save();
+
+            return $user->createToken(
+                $tokenName,
+                $abilities,
+                now()->addMinutes($expirationMinutes),
+            );
+        });
 
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
             'data' => [
-                'token' => $token->plainTextToken,
+                'access_token' => $newAccessToken->plainTextToken,
                 'token_type' => 'Bearer',
-                'user' => new AuthenticatedUserResource($user),
+                'expires_at' => $newAccessToken->accessToken->expires_at?->toISOString(),
+                'user' => (new AuthenticatedUserResource($user))->resolve($request),
             ],
-        ]);
+        ])->withHeaders($this->noStoreHeaders());
     }
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->loadMissing(['role', 'business', 'branch']);
+        $user = $request->user();
+        $user->loadMissing(['role', 'driverProfile']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Authenticated user retrieved successfully',
-            'data' => new AuthenticatedUserResource($user),
-        ]);
+            'data' => (new AuthenticatedUserResource($user))->resolve($request),
+        ])->withHeaders($this->noStoreHeaders());
     }
 
     public function logout(Request $request): JsonResponse
     {
-        $token = $request->user()->currentAccessToken();
+        $accessToken = $request->user()->currentAccessToken();
 
-        if (! $token instanceof PersonalAccessToken) {
-            return $this->error('Bearer token authentication is required.', 401);
+        if (! $accessToken instanceof PersonalAccessToken) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A bearer token is required.',
+            ], 401)->withHeaders($this->noStoreHeaders());
         }
 
-        $token->delete();
+        $accessToken->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Logout successful',
-            'data' => [],
-        ]);
+            'message' => 'Current token revoked.',
+        ])->withHeaders($this->noStoreHeaders());
     }
 
     public function logoutAll(Request $request): JsonResponse
@@ -86,16 +91,57 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'All sessions logged out successfully',
-            'data' => [],
-        ]);
+            'message' => 'All tokens revoked.',
+        ])->withHeaders($this->noStoreHeaders());
     }
 
-    private function error(string $message, int $status): JsonResponse
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function findUser(array $validated): ?User
+    {
+        $query = User::query()
+            ->withTrashed()
+            ->with(['role', 'driverProfile']);
+
+        if (isset($validated['phone'])) {
+            return $query->where('phone', $validated['phone'])->first();
+        }
+
+        if (isset($validated['email'])) {
+            return $this->findByEmail($query, $validated['email']);
+        }
+
+        $login = $validated['login'];
+
+        return str_contains($login, '@')
+            ? $this->findByEmail($query, $login)
+            : $query->where('phone', $login)->first();
+    }
+
+    private function findByEmail(Builder $query, string $email): ?User
+    {
+        return $query
+            ->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])
+            ->first();
+    }
+
+    private function invalidCredentialsResponse(): JsonResponse
     {
         return response()->json([
             'success' => false,
-            'message' => $message,
-        ], $status);
+            'message' => 'The provided credentials are invalid.',
+        ], 422)->withHeaders($this->noStoreHeaders());
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function noStoreHeaders(): array
+    {
+        return [
+            'Cache-Control' => 'no-store, private',
+            'Pragma' => 'no-cache',
+        ];
     }
 }

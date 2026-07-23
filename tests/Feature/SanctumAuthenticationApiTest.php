@@ -33,10 +33,10 @@ class SanctumAuthenticationApiTest extends TestCase
             ->assertJsonPath('data.token_type', 'Bearer')
             ->assertJsonPath('data.user.id', $owner->id)
             ->assertJsonPath('data.user.phone', $owner->phone)
-            ->assertJsonPath('data.user.role.name', 'business_owner')
-            ->assertJsonPath('data.user.business.id', $business->id);
+            ->assertJsonPath('data.user.role', 'business_owner')
+            ->assertJsonPath('data.user.business_id', $business->id);
 
-        $plainTextToken = $response->json('data.token');
+        $plainTextToken = $response->json('data.access_token');
         $accessToken = PersonalAccessToken::findToken($plainTextToken);
 
         $this->assertIsString($plainTextToken);
@@ -73,8 +73,8 @@ class SanctumAuthenticationApiTest extends TestCase
             $this->postJson('/api/auth/login', [
                 'phone' => $user->phone,
                 'password' => 'password',
-            ])->assertForbidden()
-                ->assertJsonPath('message', 'This account is not active.');
+            ])->assertUnprocessable()
+                ->assertJsonPath('message', 'The provided credentials are invalid.');
         }
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
@@ -104,8 +104,8 @@ class SanctumAuthenticationApiTest extends TestCase
             $this->postJson('/api/auth/login', [
                 'phone' => $driver->phone,
                 'password' => 'password',
-            ])->assertForbidden()
-                ->assertJsonPath('message', 'This driver profile is not active.');
+            ])->assertUnprocessable()
+                ->assertJsonPath('message', 'The provided credentials are invalid.');
         }
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
@@ -136,8 +136,8 @@ class SanctumAuthenticationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $owner->id)
             ->assertJsonPath('data.phone', $owner->phone)
-            ->assertJsonPath('data.role.name', 'business_owner')
-            ->assertJsonPath('data.business.id', $business->id);
+            ->assertJsonPath('data.role', 'business_owner')
+            ->assertJsonPath('data.business_id', $business->id);
 
         $json = json_encode($response->json(), JSON_THROW_ON_ERROR);
 
@@ -166,7 +166,7 @@ class SanctumAuthenticationApiTest extends TestCase
 
         $this->postWithToken('/api/auth/logout', $firstToken)
             ->assertOk()
-            ->assertJsonPath('message', 'Logout successful');
+            ->assertJsonPath('message', 'Current token revoked.');
 
         $this->assertDatabaseCount('personal_access_tokens', 1);
         $this->getWithToken('/api/auth/me', $firstToken)->assertUnauthorized();
@@ -181,7 +181,7 @@ class SanctumAuthenticationApiTest extends TestCase
 
         $this->postWithToken('/api/auth/logout-all', $firstToken)
             ->assertOk()
-            ->assertJsonPath('message', 'All sessions logged out successfully');
+            ->assertJsonPath('message', 'All tokens revoked.');
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
         $this->getWithToken('/api/auth/me', $firstToken)->assertUnauthorized();
@@ -269,7 +269,7 @@ class SanctumAuthenticationApiTest extends TestCase
         return $this->postJson('/api/auth/login', [
             'phone' => $user->phone,
             'password' => 'password',
-        ])->assertOk()->json('data.token');
+        ])->assertOk()->json('data.access_token');
     }
 
     private function getWithToken(string $uri, string $token): TestResponse

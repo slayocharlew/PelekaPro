@@ -24,10 +24,15 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('auth-login', function (Request $request) {
-            $phone = mb_strtolower((string) $request->input('phone', ''));
+            $identifier = mb_strtolower(trim((string) (
+                $request->input('phone')
+                ?? $request->input('email')
+                ?? $request->input('login')
+                ?? ''
+            )));
 
             return Limit::perMinute(5)
-                ->by(hash('sha256', $phone.'|'.$request->ip()))
+                ->by(hash('sha256', $identifier.'|'.$request->ip()))
                 ->response(fn () => response()->json([
                     'success' => false,
                     'message' => 'Too many login attempts. Please try again later.',

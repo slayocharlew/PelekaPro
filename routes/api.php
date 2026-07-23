@@ -13,9 +13,14 @@ Route::post('auth/login', [AuthController::class, 'login'])
     ->name('auth.login');
 
 Route::middleware(['auth:sanctum', 'active.api.user'])->group(function (): void {
-    Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
-    Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
-    Route::post('auth/logout-all', [AuthController::class, 'logoutAll'])->name('auth.logout-all');
+    Route::get('auth/me', [AuthController::class, 'me'])
+        ->name('auth.me');
+
+    Route::post('auth/logout', [AuthController::class, 'logout'])
+        ->name('auth.logout');
+
+    Route::post('auth/logout-all', [AuthController::class, 'logoutAll'])
+        ->name('auth.logout-all');
 
     Route::get('drivers/available', [DriverController::class, 'available'])
         ->name('drivers.available');

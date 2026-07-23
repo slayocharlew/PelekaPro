@@ -23,12 +23,6 @@ class DeliveryManagementApiTest extends TestCase
         $business = $this->business('Shop One');
         $owner = $this->userWithRole('business_owner', $business);
         $driver = $this->userWithRole('driver', $business);
-        DriverProfile::query()->create([
-            'business_id' => $business->id,
-            'user_id' => $driver->id,
-            'is_available' => true,
-            'current_status' => 'available',
-        ]);
         $customer = $this->customer($business);
         $address = $this->address($business, $customer);
 
@@ -205,7 +199,7 @@ class DeliveryManagementApiTest extends TestCase
 
     private function userWithRole(string $roleName, ?Business $business = null): User
     {
-        return User::query()->create([
+        $user = User::query()->create([
             'business_id' => $business?->id,
             'role_id' => $this->role($roleName)->id,
             'name' => Str::headline($roleName).' User',
@@ -214,6 +208,18 @@ class DeliveryManagementApiTest extends TestCase
             'password' => 'password',
             'status' => 'active',
         ]);
+
+        if ($roleName === 'driver' && $business) {
+            DriverProfile::query()->create([
+                'business_id' => $business->id,
+                'user_id' => $user->id,
+                'vehicle_type' => 'bodaboda',
+                'is_available' => true,
+                'current_status' => 'available',
+            ]);
+        }
+
+        return $user;
     }
 
     private function customer(Business $business, ?User $user = null): Customer

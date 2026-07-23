@@ -19,15 +19,26 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => ['required', 'string', 'max:255'],
+            'login' => ['nullable', 'required_without_all:phone,email', 'prohibits:phone,email', 'string', 'max:255'],
+            'phone' => ['nullable', 'required_without_all:login,email', 'prohibits:login,email', 'string', 'max:255'],
+            'email' => ['nullable', 'required_without_all:login,phone', 'prohibits:login,phone', 'email', 'max:255'],
             'password' => ['required', 'string'],
+            'device_name' => ['nullable', 'string', 'max:255'],
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        if (is_string($this->input('phone'))) {
-            $this->merge(['phone' => trim($this->input('phone'))]);
+        $normalized = [];
+
+        foreach (['login', 'phone', 'email'] as $identifier) {
+            if (is_string($this->input($identifier))) {
+                $normalized[$identifier] = trim($this->input($identifier));
+            }
+        }
+
+        if ($normalized !== []) {
+            $this->merge($normalized);
         }
     }
 

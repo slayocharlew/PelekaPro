@@ -16,6 +16,10 @@ Route::get('/track/{publicTrackingToken}', [CustomerTrackingController::class, '
     ->middleware(['customer.tracking.headers', 'throttle:customer-tracking-entry'])
     ->name('customer.tracking.enter');
 
+Route::get('/tracking', [CustomerTrackingController::class, 'page'])
+    ->middleware(['customer.tracking.headers'])
+    ->name('customer.tracking.page');
+
 Route::get('/tracking/session', [CustomerTrackingController::class, 'show'])
     ->middleware([
         'customer.tracking.headers',

@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\View\View;
 
 class CustomerTrackingController extends Controller
 {
@@ -31,8 +32,22 @@ class CustomerTrackingController extends Controller
         }
 
         return redirect()
-            ->route('customer.tracking.session.show')
+            ->route('customer.tracking.page')
             ->withCookie($sessions->cookieForDelivery($delivery, $request));
+    }
+
+    public function page(): View|Response
+    {
+        $principal = auth('customer_tracking')->user();
+
+        if (! $principal instanceof CustomerTrackingPrincipal) {
+            return response()
+                ->view('tracking.invalid', status: 401);
+        }
+
+        return view('tracking.show', [
+            'trackingSessionExpiresAt' => $principal->expiresAt,
+        ]);
     }
 
     public function show(

@@ -38,7 +38,7 @@ class CustomerTrackingAccessTest extends TestCase
         $cookie = $response->getCookie($cookieName);
         $encryptedCookie = $response->getCookie($cookieName, false);
 
-        $response->assertRedirect(route('customer.tracking.session.show'));
+        $response->assertRedirect(route('customer.tracking.page'));
         $this->assertNotNull($cookie);
         $this->assertNotNull($encryptedCookie);
         $this->assertTrue($cookie->isHttpOnly());

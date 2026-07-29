@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\DeliveryLiveLocationUpdated;
 use App\Exceptions\DeliveryWorkflowException;
 use App\Models\Delivery;
 use App\Models\DeliveryTrackingLocation;
@@ -70,17 +71,37 @@ class DeliveryLocationService
             return [$location, true, $lockedDelivery, $activeSession];
         });
 
+        $latestLocationUpdated = false;
+
         try {
-            $this->liveLocationStore->storeLatest($lockedDelivery, $activeSession, $location);
-        } catch (Throwable) {
+            $latestLocationUpdated = $this->liveLocationStore->storeLatest($lockedDelivery, $activeSession, $location);
+        } catch (Throwable $exception) {
             Log::warning('Unable to update Redis live delivery location.', [
                 'delivery_id' => $lockedDelivery->getKey(),
                 'tracking_session_id' => $activeSession->getKey(),
                 'location_id' => $location->getKey(),
+                'exception_class' => $exception::class,
             ]);
         }
 
+        if ($created && $latestLocationUpdated) {
+            $this->broadcastLatestLocation($lockedDelivery, $location);
+        }
+
         return [$location, $created];
+    }
+
+    private function broadcastLatestLocation(Delivery $delivery, DeliveryTrackingLocation $location): void
+    {
+        try {
+            event(DeliveryLiveLocationUpdated::fromPersistedLocation($delivery, $location));
+        } catch (Throwable $exception) {
+            Log::warning('Unable to broadcast live delivery location.', [
+                'delivery_id' => $delivery->getKey(),
+                'location_id' => $location->getKey(),
+                'exception_class' => $exception::class,
+            ]);
+        }
     }
 
     private function assertCanRecordLocation(Delivery $delivery, User $driver): void

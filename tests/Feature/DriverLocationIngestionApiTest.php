@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\DeliveryLiveLocationUpdated;
 use App\Models\Business;
 use App\Models\Customer;
 use App\Models\Delivery;
@@ -12,6 +13,7 @@ use App\Models\DriverProfile;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -24,6 +26,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $business = $this->business();
         $driver = $this->driver($business);
         $delivery = $this->deliveryFor($business, $driver);
+        Event::fake([DeliveryLiveLocationUpdated::class]);
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload())
@@ -34,6 +37,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $this->assertDatabaseMissing('delivery_tracking_locations', [
             'delivery_id' => $delivery->id,
         ]);
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
     }
 
     public function test_assigned_driver_can_submit_location_after_start_and_server_controls_relationship_fields(): void
@@ -99,6 +103,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $otherDriver = $this->driver($business);
         $otherBusinessDriver = $this->driver($otherBusiness);
         $delivery = $this->activeDeliveryFor($business, $otherDriver);
+        Event::fake([DeliveryLiveLocationUpdated::class]);
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload())
@@ -107,6 +112,8 @@ class DriverLocationIngestionApiTest extends TestCase
         $this->actingAs($otherBusinessDriver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload())
             ->assertForbidden();
+
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
     }
 
     public function test_business_owner_cannot_submit_driver_location(): void
@@ -114,11 +121,14 @@ class DriverLocationIngestionApiTest extends TestCase
         $business = $this->business();
         $owner = $this->userWithRole('business_owner', $business);
         $driver = $this->driver($business);
+        Event::fake([DeliveryLiveLocationUpdated::class]);
         $delivery = $this->activeDeliveryFor($business, $driver);
 
         $this->actingAs($owner)
             ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload())
             ->assertForbidden();
+
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
     }
 
     public function test_invalid_location_payload_is_rejected(): void
@@ -161,6 +171,7 @@ class DriverLocationIngestionApiTest extends TestCase
     {
         $business = $this->business();
         $driver = $this->driver($business);
+        Event::fake([DeliveryLiveLocationUpdated::class]);
 
         foreach (['delivered', 'failed', 'cancelled'] as $status) {
             $delivery = $this->activeDeliveryFor($business, $driver);
@@ -179,6 +190,8 @@ class DriverLocationIngestionApiTest extends TestCase
                 ->assertStatus(409)
                 ->assertJsonPath('success', false);
         }
+
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
     }
 
     public function test_location_submission_is_rejected_when_tracking_session_is_closed(): void
@@ -192,11 +205,14 @@ class DriverLocationIngestionApiTest extends TestCase
             'stopped_at' => now(),
             'stop_reason' => 'manual_stop',
         ]);
+        Event::fake([DeliveryLiveLocationUpdated::class]);
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload())
             ->assertStatus(409)
             ->assertJsonPath('message', 'Location tracking is not active for this delivery');
+
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
     }
 
     public function test_duplicate_location_submission_returns_existing_point_without_creating_duplicate(): void
@@ -205,6 +221,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $driver = $this->driver($business);
         $delivery = $this->activeDeliveryFor($business, $driver);
         $payload = $this->locationPayload();
+        Event::fake([DeliveryLiveLocationUpdated::class]);
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $payload)
@@ -218,6 +235,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $this->assertSame(1, DeliveryTrackingLocation::query()
             ->where('delivery_id', $delivery->id)
             ->count());
+        Event::assertDispatchedTimes(DeliveryLiveLocationUpdated::class, 1);
     }
 
     public function test_internal_history_endpoint_is_business_scoped_and_excludes_sensitive_fields(): void

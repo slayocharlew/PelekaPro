@@ -15,24 +15,24 @@ class LiveDeliveryLocationStore
         Delivery $delivery,
         DeliveryTrackingSession $session,
         DeliveryTrackingLocation $location
-    ): void {
+    ): bool {
         if (! $this->enabled()) {
-            return;
+            return false;
         }
 
         $store = $this->store();
         $key = $this->key($delivery->getKey());
         $payload = $this->payload($delivery, $session, $location);
 
-        $store->lock($this->lockKey($delivery->getKey()), $this->lockTtl())
-            ->block($this->lockWait(), function () use ($store, $key, $payload): void {
+        return $store->lock($this->lockKey($delivery->getKey()), $this->lockTtl())
+            ->block($this->lockWait(), function () use ($store, $key, $payload): bool {
                 $current = $store->get($key);
 
                 if (is_array($current) && ! $this->incomingIsCurrentOrNewer($current, $payload)) {
-                    return;
+                    return false;
                 }
 
-                $store->put($key, $payload, $this->locationTtl());
+                return $store->put($key, $payload, $this->locationTtl());
             });
     }
 

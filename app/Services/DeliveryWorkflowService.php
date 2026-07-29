@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\DeliveryTrackingStatusUpdated;
 use App\Exceptions\DeliveryWorkflowException;
 use App\Models\Delivery;
 use App\Models\DeliveryPayment;
@@ -22,7 +23,10 @@ class DeliveryWorkflowService
 
     private const TERMINAL_STATUSES = ['delivered', 'failed', 'cancelled'];
 
-    public function __construct(private readonly LiveDeliveryLocationStore $liveLocationStore) {}
+    public function __construct(
+        private readonly LiveDeliveryLocationStore $liveLocationStore,
+        private readonly CustomerTrackingChannelAlias $customerChannelAliases,
+    ) {}
 
     public function start(Delivery $delivery, User $driver): Delivery
     {
@@ -128,7 +132,7 @@ class DeliveryWorkflowService
             throw $throwable;
         }
 
-        $this->forgetLiveLocation($completedDelivery);
+        $this->finalizeTerminalTransition($completedDelivery);
 
         return $completedDelivery;
     }
@@ -180,7 +184,7 @@ class DeliveryWorkflowService
             throw $throwable;
         }
 
-        $this->forgetLiveLocation($failedDelivery);
+        $this->finalizeTerminalTransition($failedDelivery);
 
         return $failedDelivery;
     }
@@ -204,6 +208,24 @@ class DeliveryWorkflowService
         } catch (Throwable $throwable) {
             Log::warning('Unable to remove Redis live delivery location.', [
                 'delivery_id' => $delivery->getKey(),
+                'exception_type' => $throwable::class,
+            ]);
+        }
+    }
+
+    public function finalizeTerminalTransition(Delivery $delivery): void
+    {
+        $this->forgetLiveLocation($delivery);
+
+        try {
+            event(DeliveryTrackingStatusUpdated::fromTerminalDelivery(
+                $delivery,
+                $this->customerChannelAliases
+            ));
+        } catch (Throwable $throwable) {
+            Log::warning('Unable to broadcast terminal delivery tracking status.', [
+                'delivery_id' => $delivery->getKey(),
+                'status' => $delivery->status,
                 'exception_type' => $throwable::class,
             ]);
         }

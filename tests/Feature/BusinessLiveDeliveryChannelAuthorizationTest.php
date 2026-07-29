@@ -129,6 +129,29 @@ class BusinessLiveDeliveryChannelAuthorizationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_broadcasting_authorization_keeps_web_csrf_protection(): void
+    {
+        $business = $this->business();
+        $owner = $this->userWithRole('business_owner', $business);
+        $originalEnvironment = $this->app['env'];
+        $this->app['env'] = 'local';
+
+        try {
+            $this->actingAs($owner, 'web')
+                ->postJson('/broadcasting/auth', $this->authorizationPayload($business))
+                ->assertStatus(419);
+
+            $this->withSession(['_token' => 'known-csrf-token'])
+                ->withHeader('X-CSRF-TOKEN', 'known-csrf-token')
+                ->actingAs($owner, 'web')
+                ->postJson('/broadcasting/auth', $this->authorizationPayload($business))
+                ->assertOk()
+                ->assertJsonStructure(['auth']);
+        } finally {
+            $this->app['env'] = $originalEnvironment;
+        }
+    }
+
     private function authorizeAs(User $user, Business $business)
     {
         return $this->actingAs($user, 'web')

@@ -266,7 +266,7 @@ class DeliveryController extends Controller
             return $this->error($exception->getMessage(), $exception->statusCode());
         }
 
-        $workflowService->forgetLiveLocation($delivery);
+        $workflowService->finalizeTerminalTransition($delivery);
 
         $delivery->load($this->deliveryRelations());
 

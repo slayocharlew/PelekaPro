@@ -10,4 +10,10 @@ return [
         'lock_wait_seconds' => 1,
         'key_prefix' => 'pelekapro:delivery',
     ],
+    'customer_tracking' => [
+        'cookie_name' => 'pelekapro_customer_tracking',
+        'session_lifetime_minutes' => (int) env('PELEKAPRO_CUSTOMER_TRACKING_SESSION_LIFETIME', 30),
+        'cookie_path' => '/',
+        'same_site' => 'lax',
+    ],
 ];

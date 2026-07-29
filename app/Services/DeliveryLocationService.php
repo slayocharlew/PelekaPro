@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\CustomerDeliveryLiveLocationUpdated;
 use App\Events\DeliveryLiveLocationUpdated;
 use App\Exceptions\DeliveryWorkflowException;
 use App\Models\Delivery;
@@ -17,7 +18,10 @@ class DeliveryLocationService
 {
     private const ACTIVE_STATUSES = ['on_the_way', 'arrived'];
 
-    public function __construct(private readonly LiveDeliveryLocationStore $liveLocationStore) {}
+    public function __construct(
+        private readonly LiveDeliveryLocationStore $liveLocationStore,
+        private readonly CustomerTrackingChannelAlias $customerChannelAliases,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -95,6 +99,11 @@ class DeliveryLocationService
     {
         try {
             event(DeliveryLiveLocationUpdated::fromPersistedLocation($delivery, $location));
+            event(CustomerDeliveryLiveLocationUpdated::fromPersistedLocation(
+                $delivery,
+                $location,
+                $this->customerChannelAliases
+            ));
         } catch (Throwable $exception) {
             Log::warning('Unable to broadcast live delivery location.', [
                 'delivery_id' => $delivery->getKey(),

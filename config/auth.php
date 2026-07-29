@@ -42,6 +42,9 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        'customer_tracking' => [
+            'driver' => 'customer-tracking-cookie',
+        ],
     ],
 
     /*

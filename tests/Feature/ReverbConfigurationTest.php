@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Composer\InstalledVersions;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -25,15 +26,29 @@ class ReverbConfigurationTest extends TestCase
     {
         $broadcastingRoutes = collect(Route::getRoutes()->getRoutes())
             ->filter(fn ($route): bool => $route->uri() === 'broadcasting/auth');
+        $route = $broadcastingRoutes->first();
 
         $this->assertCount(1, $broadcastingRoutes);
-        $this->assertContains('web', $broadcastingRoutes->first()->gatherMiddleware());
+        $this->assertSame(['POST'], $route->methods());
+        $this->assertContains('web', $route->gatherMiddleware());
+        $this->assertContains(
+            PreventRequestForgery::class,
+            app('router')->gatherRouteMiddleware($route)
+        );
 
         Artisan::call('channel:list');
         $output = Artisan::output();
 
         $this->assertStringContainsString('business.{businessId}.live-deliveries', $output);
         $this->assertSame(1, substr_count($output, 'business.{businessId}.live-deliveries'));
+        $this->assertStringContainsString('delivery-tracking.{channelAlias}', $output);
+        $this->assertSame(1, substr_count($output, 'delivery-tracking.{channelAlias}'));
+    }
+
+    public function test_get_and_head_cannot_authorize_broadcasting_channels(): void
+    {
+        $this->get('/broadcasting/auth')->assertMethodNotAllowed();
+        $this->call('HEAD', '/broadcasting/auth')->assertMethodNotAllowed();
     }
 
     public function test_existing_sanctum_routes_remain_registered(): void

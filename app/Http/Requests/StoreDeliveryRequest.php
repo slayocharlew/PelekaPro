@@ -160,7 +160,12 @@ class StoreDeliveryRequest extends FormRequest
         $exists = User::query()
             ->whereKey($this->input('assigned_driver_id'))
             ->where('business_id', $businessId)
+            ->where('status', 'active')
             ->whereHas('role', fn ($query) => $query->where('name', 'driver'))
+            ->whereHas('driverProfile', fn ($query) => $query
+                ->where('business_id', $businessId)
+                ->where('is_available', true)
+                ->where('current_status', 'available'))
             ->exists();
 
         if (! $exists) {

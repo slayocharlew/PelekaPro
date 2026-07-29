@@ -96,7 +96,6 @@ class DeliveryResource extends JsonResource
                 'branch_id' => $this->assignedDriver->branch_id,
                 'name' => $this->assignedDriver->name,
                 'phone' => $this->assignedDriver->phone,
-                'email' => $this->assignedDriver->email,
                 'status' => $this->assignedDriver->status,
             ] : null),
             'items' => DeliveryItemResource::collection($this->whenLoaded('items')),
@@ -112,8 +111,6 @@ class DeliveryResource extends JsonResource
                 'changed_by_user' => $log->relationLoaded('changedBy') && $log->changedBy ? [
                     'id' => $log->changedBy->id,
                     'name' => $log->changedBy->name,
-                    'phone' => $log->changedBy->phone,
-                    'email' => $log->changedBy->email,
                 ] : null,
             ])),
             'payment' => $this->whenLoaded('payment', fn () => $this->payment ? [
@@ -136,8 +133,8 @@ class DeliveryResource extends JsonResource
                 'recipient_name' => $this->proof->recipient_name,
                 'recipient_phone' => $this->proof->recipient_phone,
                 'pin_verified' => $this->proof->pin_verified,
-                'photo_path' => $this->proof->photo_path,
-                'signature_path' => $this->proof->signature_path,
+                'has_photo' => $this->proof->photo_path !== null,
+                'has_signature' => $this->proof->signature_path !== null,
                 'delivered_latitude' => $this->proof->delivered_latitude,
                 'delivered_longitude' => $this->proof->delivered_longitude,
                 'note' => $this->proof->note,
@@ -151,7 +148,7 @@ class DeliveryResource extends JsonResource
                 'reason_note' => $this->failure->reason_note,
                 'failed_latitude' => $this->failure->failed_latitude,
                 'failed_longitude' => $this->failure->failed_longitude,
-                'photo_path' => $this->failure->photo_path,
+                'has_photo' => $this->failure->photo_path !== null,
                 'failed_at' => $this->failure->failed_at,
                 'reason' => $this->failure->relationLoaded('failedDeliveryReason') && $this->failure->failedDeliveryReason ? [
                     'id' => $this->failure->failedDeliveryReason->id,

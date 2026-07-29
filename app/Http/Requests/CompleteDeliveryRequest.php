@@ -56,11 +56,20 @@ class CompleteDeliveryRequest extends FormRequest
             }
 
             $payment = $delivery->payment()->first();
-            $paymentMethod = $this->input('payment_method', $payment?->payment_method ?? $this->paymentMethodFor($delivery->payment_method));
+            $paymentMethod = $payment?->payment_method ?? $this->paymentMethodFor($delivery->payment_method);
             $expectedAmount = (float) ($payment?->expected_amount ?? $delivery->amount_to_collect);
+            $paymentNotRequired = $expectedAmount <= 0 || in_array($paymentMethod, ['none', 'prepaid'], true);
 
-            if ($expectedAmount > 0 && ! in_array($paymentMethod, ['none', 'prepaid'], true) && ! $this->filled('collected_amount')) {
+            if ($this->filled('payment_method') && $this->input('payment_method') !== $paymentMethod) {
+                $validator->errors()->add('payment_method', 'The payment method must match the delivery payment method.');
+            }
+
+            if (! $paymentNotRequired && ! $this->filled('collected_amount')) {
                 $validator->errors()->add('collected_amount', 'The collected amount is required for this delivery payment.');
+            }
+
+            if ($paymentNotRequired && $this->filled('collected_amount') && (float) $this->input('collected_amount') > 0) {
+                $validator->errors()->add('collected_amount', 'This delivery does not require payment collection.');
             }
         });
     }

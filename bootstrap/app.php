@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AddCustomerTrackingSecurityHeaders;
 use App\Http\Middleware\EnsureActiveApiUser;
+use App\Http\Middleware\EnsureActiveWebUser;
 use App\Http\Middleware\EnsureBusinessScope;
 use App\Http\Middleware\EnsureCustomerTrackingAccess;
 use App\Http\Middleware\EnsureDriverAssignedDelivery;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'active.api.user' => EnsureActiveApiUser::class,
+            'active.web.user' => EnsureActiveWebUser::class,
             'role' => EnsureUserHasRole::class,
             'business.scope' => EnsureBusinessScope::class,
             'driver.delivery' => EnsureDriverAssignedDelivery::class,

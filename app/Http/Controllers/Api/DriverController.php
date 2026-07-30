@@ -6,8 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\DriverDeliveryResource;
 use App\Http\Resources\DriverResource;
 use App\Models\Delivery;
-use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\DeliveryAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -15,6 +14,10 @@ use Illuminate\Support\Facades\Validator;
 
 class DriverController extends Controller
 {
+    public function __construct(
+        private readonly DeliveryAssignmentService $assignments,
+    ) {}
+
     public function available(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -39,19 +42,7 @@ class DriverController extends Controller
             ? $request->query('business_id')
             : $user->business_id;
 
-        $drivers = User::query()
-            ->with('driverProfile')
-            ->where('status', 'active')
-            ->when($businessId, fn (Builder $query, int|string $businessId) => $query->where('business_id', $businessId))
-            ->whereHas('role', fn (Builder $roleQuery) => $roleQuery->where('name', 'driver'))
-            ->whereHas('driverProfile', function (Builder $profileQuery) use ($businessId): void {
-                $profileQuery
-                    ->when($businessId, fn (Builder $query, int|string $businessId) => $query->where('business_id', $businessId))
-                    ->where('is_available', true)
-                    ->where('current_status', 'available');
-            })
-            ->orderBy('name')
-            ->get();
+        $drivers = $this->assignments->availableDrivers($businessId);
 
         return $this->success('Available drivers retrieved successfully', DriverResource::collection($drivers));
     }

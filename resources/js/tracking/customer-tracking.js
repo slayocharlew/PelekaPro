@@ -41,8 +41,7 @@ class CustomerTrackingPage {
         this.elements = this.collectElements();
         this.map = new CustomerTrackingMap(
             this.elements.map,
-            this.elements.mapPlaceholder,
-            import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ''
+            this.elements.mapPlaceholder
         );
         this.mapReady = this.map.initialize();
     }

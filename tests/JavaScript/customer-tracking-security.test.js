@@ -78,15 +78,26 @@ test('frontend source exposes no Reverb secret or application key', async () => 
     assert.equal(combined.includes('VITE_REVERB_APP_KEY'), true);
 });
 
-test('Google Maps receives only the token-free page origin for browser-key restrictions', async () => {
-    const source = await readFile(
-        new URL('../../resources/js/tracking/map-adapter.js', import.meta.url),
-        'utf8'
-    );
+test('OpenStreetMap uses attributed tiles with only the token-free page origin', async () => {
+    const [mapSource, pageSource, environmentExample, packageSource] = await Promise.all([
+        '../../resources/js/tracking/map-adapter.js',
+        '../../resources/js/tracking/customer-tracking.js',
+        '../../.env.example',
+        '../../package.json',
+    ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')));
+    const frontendConfiguration = [mapSource, pageSource, environmentExample].join('\n');
+    const packageConfiguration = JSON.parse(packageSource);
 
-    assert.equal(source.includes("script.referrerPolicy = 'origin'"), true);
-    assert.equal(source.includes('public_tracking_token'), false);
-    assert.equal(source.includes('/track/'), false);
+    assert.equal(mapSource.includes("from 'leaflet'"), true);
+    assert.equal(mapSource.includes('https://tile.openstreetmap.org/{z}/{x}/{y}.png'), true);
+    assert.equal(mapSource.includes('OpenStreetMap</a> contributors'), true);
+    assert.equal(mapSource.includes("referrerPolicy: 'origin'"), true);
+    assert.equal(packageConfiguration.dependencies.leaflet, '^1.9.4');
+    assert.equal(frontendConfiguration.includes('maps.googleapis.com'), false);
+    assert.equal(frontendConfiguration.includes('google.maps'), false);
+    assert.equal(frontendConfiguration.includes('VITE_GOOGLE_MAPS_API_KEY'), false);
+    assert.equal(frontendConfiguration.includes('public_tracking_token'), false);
+    assert.equal(frontendConfiguration.includes('/track/'), false);
 });
 
 test('service worker uses network-only tracking routes and caches static assets only', async () => {

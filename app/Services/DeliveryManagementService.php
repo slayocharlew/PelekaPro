@@ -142,35 +142,33 @@ class DeliveryManagementService
                     ->findOrFail($payload['customer_address_id'])
                 : null;
 
-            $deliveryData = $this->deliveryPayload($payload);
-            $this->applyCustomerDefaults($deliveryData, $customer);
-            $this->applyAddressDefaults($deliveryData, $address);
+            return $this->persistDelivery($payload, $businessId, $user, $customer, $address);
+        });
 
-            $deliveryData['business_id'] = $businessId;
-            $deliveryData['created_by'] = $user?->getKey();
-            $deliveryData['delivery_number'] = $this->numbers->deliveryNumber();
-            $deliveryData['tracking_code'] = $this->numbers->trackingCode();
-            $deliveryData['public_tracking_token'] = $this->numbers->publicTrackingToken();
-            $deliveryData['delivery_pin'] = $this->numbers->deliveryPin();
-            $deliveryData['payment_method'] = $deliveryData['payment_method'] ?? 'cash_on_delivery';
-            $deliveryData['amount_to_collect'] = $deliveryData['amount_to_collect'] ?? 0;
-            $deliveryData['delivery_fee'] = $deliveryData['delivery_fee'] ?? 0;
-            $deliveryData['status'] = $this->initialStatus($deliveryData, $address);
+        return $delivery->load($this->relations());
+    }
 
-            if ($deliveryData['status'] === 'location_confirmed') {
-                $deliveryData['customer_location_confirmed_at'] = now();
-            }
+    /**
+     * Create a delivery and its newly entered customer as one atomic operation.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function createForNewCustomer(array $payload, int|string $businessId, ?User $user): Delivery
+    {
+        $delivery = DB::transaction(function () use ($payload, $businessId, $user): Delivery {
+            $customer = Customer::query()->create([
+                'business_id' => $businessId,
+                'name' => $payload['customer_name'],
+                'phone' => $payload['customer_phone'],
+                'email' => $payload['customer_email'] ?? null,
+                'status' => 'active',
+            ]);
 
-            if (! empty($deliveryData['assigned_driver_id'])) {
-                $deliveryData['assigned_at'] = now();
-            }
+            $address = $this->createCustomerAddressFromDropoff($payload, $businessId, $customer);
+            $payload['customer_id'] = $customer->getKey();
+            $payload['customer_address_id'] = $address?->getKey();
 
-            $delivery = Delivery::query()->create($deliveryData);
-            $this->replaceItems($delivery, $payload['items'] ?? []);
-            $this->logStatusChange($delivery, null, $delivery->status, $user, 'Delivery created');
-            $this->syncPayment($delivery);
-
-            return $delivery;
+            return $this->persistDelivery($payload, $businessId, $user, $customer, $address);
         });
 
         return $delivery->load($this->relations());
@@ -308,6 +306,74 @@ class DeliveryManagementService
             'amount_to_collect',
             'delivery_fee',
             'special_instruction',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function persistDelivery(
+        array $payload,
+        int|string $businessId,
+        ?User $user,
+        Customer $customer,
+        ?CustomerAddress $address
+    ): Delivery {
+        $deliveryData = $this->deliveryPayload($payload);
+        $this->applyCustomerDefaults($deliveryData, $customer);
+        $this->applyAddressDefaults($deliveryData, $address);
+
+        $deliveryData['business_id'] = $businessId;
+        $deliveryData['created_by'] = $user?->getKey();
+        $deliveryData['delivery_number'] = $this->numbers->deliveryNumber();
+        $deliveryData['tracking_code'] = $this->numbers->trackingCode();
+        $deliveryData['public_tracking_token'] = $this->numbers->publicTrackingToken();
+        $deliveryData['delivery_pin'] = $this->numbers->deliveryPin();
+        $deliveryData['payment_method'] = $deliveryData['payment_method'] ?? 'cash_on_delivery';
+        $deliveryData['amount_to_collect'] = $deliveryData['amount_to_collect'] ?? 0;
+        $deliveryData['delivery_fee'] = $deliveryData['delivery_fee'] ?? 0;
+        $deliveryData['status'] = $this->initialStatus($deliveryData, $address);
+
+        if ($deliveryData['status'] === 'location_confirmed') {
+            $deliveryData['customer_location_confirmed_at'] = now();
+        }
+
+        if (! empty($deliveryData['assigned_driver_id'])) {
+            $deliveryData['assigned_at'] = now();
+        }
+
+        $delivery = Delivery::query()->create($deliveryData);
+        $this->replaceItems($delivery, $payload['items'] ?? []);
+        $this->logStatusChange($delivery, null, $delivery->status, $user, 'Delivery created');
+        $this->syncPayment($delivery);
+
+        return $delivery;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function createCustomerAddressFromDropoff(
+        array $payload,
+        int|string $businessId,
+        Customer $customer
+    ): ?CustomerAddress {
+        if (! $this->hasValue($payload['dropoff_address'] ?? null)
+            && ! $this->hasValue($payload['dropoff_latitude'] ?? null)
+            && ! $this->hasValue($payload['dropoff_longitude'] ?? null)
+        ) {
+            return null;
+        }
+
+        return CustomerAddress::query()->create([
+            'business_id' => $businessId,
+            'customer_id' => $customer->getKey(),
+            'label' => 'Delivery address',
+            'street' => $payload['dropoff_address'] ?? null,
+            'latitude' => $payload['dropoff_latitude'] ?? null,
+            'longitude' => $payload['dropoff_longitude'] ?? null,
+            'is_default' => true,
+            'is_verified' => false,
         ]);
     }
 

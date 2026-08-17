@@ -83,14 +83,17 @@ class PortalDeliveryManagementTest extends TestCase
         $business = $this->business('Creation Business');
         $otherBusiness = $this->business('Other Creation Business');
         $owner = $this->userWithRole('business_owner', $business);
-        $customer = $this->customer($business);
-        $address = $this->address($business, $customer);
+        $otherCustomer = $this->customer($otherBusiness);
+        $otherAddress = $this->address($otherBusiness, $otherCustomer);
         $driver = $this->driver($business);
 
         $response = $this->actingAs($owner, 'web')->post(route('portal.deliveries.store'), [
             'business_id' => $otherBusiness->id,
-            'customer_id' => $customer->id,
-            'customer_address_id' => $address->id,
+            'customer_id' => $otherCustomer->id,
+            'customer_address_id' => $otherAddress->id,
+            'customer_name' => 'Asha Mteja',
+            'customer_phone' => '255712345678',
+            'customer_email' => 'asha@example.test',
             'assigned_driver_id' => $driver->id,
             'delivery_number' => 'BROWSER-CONTROLLED',
             'tracking_code' => 'BROWSER-TRACKING',
@@ -112,15 +115,38 @@ class PortalDeliveryManagementTest extends TestCase
         ]);
 
         $delivery = Delivery::query()->sole();
+        $customer = Customer::query()->where('phone', '255712345678')->sole();
+        $address = CustomerAddress::query()->where('customer_id', $customer->id)->sole();
 
         $response->assertRedirect(route('portal.deliveries.show', $delivery));
         $this->assertSame($business->id, $delivery->business_id);
+        $this->assertSame($customer->id, $delivery->customer_id);
+        $this->assertSame($address->id, $delivery->customer_address_id);
         $this->assertNull($delivery->assigned_driver_id);
         $this->assertSame('location_confirmed', $delivery->status);
+        $this->assertSame('Asha Mteja', $delivery->dropoff_name);
+        $this->assertSame('255712345678', $delivery->dropoff_phone);
         $this->assertNotSame('BROWSER-CONTROLLED', $delivery->delivery_number);
         $this->assertNotSame('BROWSER-TRACKING', $delivery->tracking_code);
         $this->assertNotSame('browser-public-token', $delivery->public_tracking_token);
         $this->assertNotSame('000000', $delivery->delivery_pin);
+        $this->assertDatabaseHas('customers', [
+            'id' => $customer->id,
+            'business_id' => $business->id,
+            'name' => 'Asha Mteja',
+            'phone' => '255712345678',
+            'email' => 'asha@example.test',
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('customer_addresses', [
+            'id' => $address->id,
+            'business_id' => $business->id,
+            'customer_id' => $customer->id,
+            'label' => 'Delivery address',
+            'street' => 'Mikocheni, Dar es Salaam',
+            'is_default' => true,
+            'is_verified' => false,
+        ]);
         $this->assertDatabaseHas('delivery_items', [
             'delivery_id' => $delivery->id,
             'item_name' => 'Parcel',
@@ -143,7 +169,11 @@ class PortalDeliveryManagementTest extends TestCase
             ->get(route('portal.deliveries.create'))
             ->assertOk()
             ->assertSee('Create delivery')
-            ->assertSee('name="customer_id"', false)
+            ->assertSee('name="customer_name"', false)
+            ->assertSee('name="customer_phone"', false)
+            ->assertSee('name="customer_email"', false)
+            ->assertDontSee('name="customer_id"', false)
+            ->assertDontSee('name="customer_address_id"', false)
             ->assertSee('name="items[0][item_name]"', false);
 
         $this->actingAs($owner, 'web')
@@ -153,9 +183,11 @@ class PortalDeliveryManagementTest extends TestCase
                 'dropoff_latitude' => 100,
             ])
             ->assertRedirect(route('portal.deliveries.create'))
-            ->assertSessionHasErrors(['customer_id', 'items', 'dropoff_latitude']);
+            ->assertSessionHasErrors(['customer_name', 'customer_phone', 'items', 'dropoff_latitude']);
 
         $this->assertDatabaseCount('deliveries', 0);
+        $this->assertDatabaseCount('customers', 0);
+        $this->assertDatabaseCount('customer_addresses', 0);
     }
 
     public function test_authorized_detail_contains_tracking_link_but_cross_business_detail_is_denied(): void

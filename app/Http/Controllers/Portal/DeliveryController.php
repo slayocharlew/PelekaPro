@@ -10,8 +10,6 @@ use App\Http\Requests\PortalStoreDeliveryRequest;
 use App\Http\Requests\PortalUpdateDeliveryRequest;
 use App\Models\Business;
 use App\Models\BusinessBranch;
-use App\Models\Customer;
-use App\Models\CustomerAddress;
 use App\Models\Delivery;
 use App\Models\User;
 use App\Services\DeliveryAssignmentService;
@@ -89,7 +87,7 @@ class DeliveryController extends Controller
     {
         Gate::authorize('create', Delivery::class);
 
-        $delivery = $this->deliveries->create(
+        $delivery = $this->deliveries->createForNewCustomer(
             $request->validated(),
             $request->resolvedBusinessId(),
             $request->user('web')
@@ -222,16 +220,6 @@ class DeliveryController extends Controller
                 ->whereIn('business_id', $businessIds)
                 ->where('status', 'active')
                 ->orderBy('name')
-                ->get(),
-            'customers' => Customer::query()
-                ->whereIn('business_id', $businessIds)
-                ->where('status', 'active')
-                ->orderBy('name')
-                ->get(),
-            'addresses' => CustomerAddress::query()
-                ->whereIn('business_id', $businessIds)
-                ->orderByDesc('is_default')
-                ->orderBy('label')
                 ->get(),
             'paymentMethods' => DeliveryManagementService::PAYMENT_METHODS,
         ];

@@ -1,8 +1,6 @@
 @php
     $editing = isset($delivery);
     $selectedBusinessId = old('business_id', $editing ? $delivery->business_id : auth('web')->user()->business_id);
-    $selectedCustomerId = old('customer_id', $editing ? $delivery->customer_id : null);
-    $selectedAddressId = old('customer_address_id', $editing ? $delivery->customer_address_id : null);
     $itemRows = old('items', $editing
         ? $delivery->items->map(fn ($item) => [
             'item_name' => $item->item_name,
@@ -24,8 +22,11 @@
     <div class="portal-card__header">
         <div>
             <p class="portal-eyebrow">Customer</p>
-            <h2>Customer and branch</h2>
+            <h2>{{ $editing ? 'Customer and branch' : 'Enter customer details' }}</h2>
         </div>
+        @unless ($editing)
+            <p>The customer will be saved to your business when this delivery is created.</p>
+        @endunless
     </div>
 
     <div class="portal-form-grid">
@@ -57,36 +58,38 @@
             @error('branch_id') <p class="portal-field__error">{{ $message }}</p> @enderror
         </div>
 
-        <div class="portal-field">
-            <label for="customer_id">Customer <span aria-hidden="true">*</span></label>
-            <select id="customer_id" name="customer_id" required data-customer-select data-business-option-list>
-                <option value="">Select a customer</option>
-                @foreach ($customers as $customer)
-                    <option value="{{ $customer->id }}" data-business-id="{{ $customer->business_id }}" @selected((string) $selectedCustomerId === (string) $customer->id)>
-                        {{ $customer->name }} · {{ $customer->phone }}
-                    </option>
-                @endforeach
-            </select>
-            @error('customer_id') <p class="portal-field__error">{{ $message }}</p> @enderror
-        </div>
-
-        <div class="portal-field">
-            <label for="customer_address_id">Saved customer address</label>
-            <select id="customer_address_id" name="customer_address_id" data-address-select>
-                <option value="">Enter location below</option>
-                @foreach ($addresses as $address)
-                    <option
-                        value="{{ $address->id }}"
-                        data-business-id="{{ $address->business_id }}"
-                        data-customer-id="{{ $address->customer_id }}"
-                        @selected((string) $selectedAddressId === (string) $address->id)
-                    >
-                        {{ $address->label ?: 'Saved address' }} · {{ collect([$address->street, $address->ward, $address->district, $address->region])->filter()->implode(', ') }}
-                    </option>
-                @endforeach
-            </select>
-            @error('customer_address_id') <p class="portal-field__error">{{ $message }}</p> @enderror
-        </div>
+        @if ($editing)
+            <div class="portal-field">
+                <label for="existing_customer_name">Customer</label>
+                <input id="existing_customer_name" type="text" value="{{ $delivery->customer->name }}" disabled>
+            </div>
+            <div class="portal-field">
+                <label for="existing_customer_phone">Customer phone</label>
+                <input id="existing_customer_phone" type="text" value="{{ $delivery->customer->phone }}" disabled>
+            </div>
+            @if ($delivery->customer->email)
+                <div class="portal-field">
+                    <label for="existing_customer_email">Customer email</label>
+                    <input id="existing_customer_email" type="email" value="{{ $delivery->customer->email }}" disabled>
+                </div>
+            @endif
+        @else
+            <div class="portal-field">
+                <label for="customer_name">Customer name <span aria-hidden="true">*</span></label>
+                <input id="customer_name" name="customer_name" type="text" maxlength="255" autocomplete="name" value="{{ old('customer_name') }}" required>
+                @error('customer_name') <p class="portal-field__error">{{ $message }}</p> @enderror
+            </div>
+            <div class="portal-field">
+                <label for="customer_phone">Customer phone <span aria-hidden="true">*</span></label>
+                <input id="customer_phone" name="customer_phone" type="tel" maxlength="255" autocomplete="tel" value="{{ old('customer_phone') }}" required>
+                @error('customer_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
+            </div>
+            <div class="portal-field">
+                <label for="customer_email">Customer email (optional)</label>
+                <input id="customer_email" name="customer_email" type="email" maxlength="255" autocomplete="email" placeholder="Optional" value="{{ old('customer_email') }}">
+                @error('customer_email') <p class="portal-field__error">{{ $message }}</p> @enderror
+            </div>
+        @endif
     </div>
 </section>
 
@@ -134,18 +137,18 @@
         <fieldset class="portal-fieldset">
             <legend>Drop-off</legend>
             <div class="portal-field">
-                <label for="dropoff_name">Recipient name</label>
+                <label for="dropoff_name">Recipient name {{ $editing ? '' : '(if different)' }}</label>
                 <input id="dropoff_name" name="dropoff_name" type="text" maxlength="255" value="{{ old('dropoff_name', $editing ? $delivery->dropoff_name : '') }}">
                 @error('dropoff_name') <p class="portal-field__error">{{ $message }}</p> @enderror
             </div>
             <div class="portal-field">
-                <label for="dropoff_phone">Recipient phone</label>
+                <label for="dropoff_phone">Recipient phone {{ $editing ? '' : '(if different)' }}</label>
                 <input id="dropoff_phone" name="dropoff_phone" type="tel" maxlength="255" value="{{ old('dropoff_phone', $editing ? $delivery->dropoff_phone : '') }}">
                 @error('dropoff_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
             </div>
             <div class="portal-field">
                 <label for="dropoff_address">Address</label>
-                <textarea id="dropoff_address" name="dropoff_address" rows="3">{{ old('dropoff_address', $editing ? $delivery->dropoff_address : '') }}</textarea>
+                <textarea id="dropoff_address" name="dropoff_address" rows="3" maxlength="255">{{ old('dropoff_address', $editing ? $delivery->dropoff_address : '') }}</textarea>
                 @error('dropoff_address') <p class="portal-field__error">{{ $message }}</p> @enderror
             </div>
             <div class="portal-coordinate-grid">

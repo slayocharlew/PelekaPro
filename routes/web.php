@@ -6,9 +6,7 @@ use App\Http\Controllers\PortalAuthController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::redirect('/', '/login');
 
 Route::middleware('guest:web')->group(function (): void {
     Route::get('/login', [PortalAuthController::class, 'create'])->name('login');

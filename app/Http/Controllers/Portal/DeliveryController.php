@@ -217,6 +217,7 @@ class DeliveryController extends Controller
         return [
             'businesses' => $user->isSuperAdmin() ? $this->activeBusinesses() : collect(),
             'branches' => BusinessBranch::query()
+                ->with('business:id,phone')
                 ->whereIn('business_id', $businessIds)
                 ->where('status', 'active')
                 ->orderBy('name')

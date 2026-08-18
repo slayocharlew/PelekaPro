@@ -16,4 +16,11 @@ return [
         'cookie_path' => '/',
         'same_site' => 'lax',
     ],
+    'customer_delivery_request' => [
+        'cookie_name' => 'pelekapro_delivery_request',
+        'link_lifetime_hours' => (int) env('PELEKAPRO_DELIVERY_REQUEST_LINK_LIFETIME_HOURS', 24),
+        'session_lifetime_minutes' => (int) env('PELEKAPRO_DELIVERY_REQUEST_SESSION_LIFETIME_MINUTES', 30),
+        'cookie_path' => '/delivery-request',
+        'same_site' => 'lax',
+    ],
 ];

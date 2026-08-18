@@ -142,4 +142,9 @@ class Delivery extends Model
     {
         return $this->hasMany(NotificationLog::class);
     }
+
+    public function sourceCustomerDeliveryRequest(): HasOne
+    {
+        return $this->hasOne(CustomerDeliveryRequest::class, 'converted_delivery_id');
+    }
 }

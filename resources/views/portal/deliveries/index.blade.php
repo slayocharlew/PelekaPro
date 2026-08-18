@@ -5,11 +5,12 @@
 @section('content')
     <div class="portal-page-heading">
         <div>
-            <p class="portal-eyebrow">Operations</p>
             <h1>Deliveries</h1>
-            <p>Manage orders, driver assignment, and customer tracking access.</p>
         </div>
-        <a class="portal-button portal-button--primary" href="{{ route('portal.deliveries.create') }}">Create delivery</a>
+        <div class="portal-page-heading__actions">
+            <a class="portal-button portal-button--secondary" href="{{ route('portal.delivery-requests.create') }}">Request customer details</a>
+            <a class="portal-button portal-button--primary" href="{{ route('portal.deliveries.create') }}">Create manually</a>
+        </div>
     </div>
 
     <form class="portal-filter-card" method="GET" action="{{ route('portal.deliveries.index') }}">

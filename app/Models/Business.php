@@ -61,6 +61,11 @@ class Business extends Model
         return $this->hasMany(Delivery::class);
     }
 
+    public function customerDeliveryRequests(): HasMany
+    {
+        return $this->hasMany(CustomerDeliveryRequest::class);
+    }
+
     public function deliveryPayments(): HasMany
     {
         return $this->hasMany(DeliveryPayment::class);

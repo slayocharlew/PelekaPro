@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\CustomerDeliveryRequestSessionService;
 use App\Services\CustomerTrackingSessionService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +29,11 @@ class AppServiceProvider extends ServiceProvider
         Auth::viaRequest(
             'customer-tracking-cookie',
             fn (Request $request) => app(CustomerTrackingSessionService::class)->principalFromRequest($request)
+        );
+
+        Auth::viaRequest(
+            'customer-delivery-request-cookie',
+            fn (Request $request) => app(CustomerDeliveryRequestSessionService::class)->principalFromRequest($request)
         );
 
         RateLimiter::for('auth-login', function (Request $request) {
@@ -66,6 +72,18 @@ class AppServiceProvider extends ServiceProvider
             ->by($this->customerTrackingRequestKey($request, 'delete'))
             ->response(fn () => $this->trackingRateLimitResponse()));
 
+        RateLimiter::for('customer-delivery-request-entry', fn (Request $request) => Limit::perMinute(10)
+            ->by(hash('sha256', 'customer-delivery-request-entry|'.$request->ip()))
+            ->response(fn () => $this->deliveryRequestRateLimitResponse()));
+
+        RateLimiter::for('customer-delivery-request-submit', fn (Request $request) => Limit::perMinute(5)
+            ->by($this->customerDeliveryRequestKey($request, 'submit'))
+            ->response(fn () => $this->deliveryRequestRateLimitResponse()));
+
+        RateLimiter::for('customer-delivery-request-session-delete', fn (Request $request) => Limit::perMinute(10)
+            ->by($this->customerDeliveryRequestKey($request, 'delete'))
+            ->response(fn () => $this->deliveryRequestRateLimitResponse()));
+
         RateLimiter::for('broadcasting-auth', fn (Request $request) => [
             Limit::perMinute(60)
                 ->by(hash('sha256', 'broadcasting-auth|'.$request->ip()))
@@ -90,10 +108,27 @@ class AppServiceProvider extends ServiceProvider
         ]));
     }
 
+    private function customerDeliveryRequestKey(Request $request, string $namespace): string
+    {
+        return hash('sha256', implode('|', [
+            'customer-delivery-request',
+            $namespace,
+            (string) $request->ip(),
+            (string) $request->cookie((string) config('pelekapro.customer_delivery_request.cookie_name')),
+        ]));
+    }
+
     private function trackingRateLimitResponse()
     {
         return response()->json([
             'message' => 'Too many tracking requests. Please try again later.',
+        ], 429);
+    }
+
+    private function deliveryRequestRateLimitResponse()
+    {
+        return response()->json([
+            'message' => 'Too many delivery request attempts. Please try again later.',
         ], 429);
     }
 }

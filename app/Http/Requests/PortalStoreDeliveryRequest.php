@@ -45,10 +45,11 @@ class PortalStoreDeliveryRequest extends StoreDeliveryRequest
             $branchExists = BusinessBranch::query()
                 ->whereKey($this->input('branch_id'))
                 ->where('business_id', $businessId)
+                ->where('status', 'active')
                 ->exists();
 
             if (! $branchExists) {
-                $validator->errors()->add('branch_id', 'The selected branch does not belong to this business.');
+                $validator->errors()->add('branch_id', 'The selected branch is not available for this business.');
             }
         });
     }

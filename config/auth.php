@@ -45,6 +45,9 @@ return [
         'customer_tracking' => [
             'driver' => 'customer-tracking-cookie',
         ],
+        'customer_delivery_request' => [
+            'driver' => 'customer-delivery-request-cookie',
+        ],
     ],
 
     /*

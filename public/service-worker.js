@@ -8,6 +8,8 @@ const OWNED_STATIC_ASSETS = [
 const PRIVATE_PATHS = [
     /^\/track(?:\/|$)/,
     /^\/tracking(?:\/|$)/,
+    /^\/request-delivery(?:\/|$)/,
+    /^\/delivery-request(?:\/|$)/,
     /^\/broadcasting\/auth$/,
 ];
 

@@ -144,6 +144,55 @@ function initializeDeliverySelectors(root) {
     filterOptions();
 }
 
+function initializeBranchPickupDefaults(root) {
+    root.querySelectorAll('[data-branch-pickup-select]').forEach((select) => {
+        const form = select.closest('form') || root;
+        const name = form.querySelector('[data-pickup-name-field]');
+        const phone = form.querySelector('[data-pickup-phone-field]');
+        const address = form.querySelector('[data-pickup-address-field]');
+        const latitude = form.querySelector('[data-pickup-latitude-field]');
+        const longitude = form.querySelector('[data-pickup-longitude-field]');
+        const status = form.querySelector('[data-branch-pickup-status]');
+        let hadSelectedBranch = false;
+
+        const setReadonly = (field, readonly) => {
+            if (!field) return;
+
+            field.readOnly = readonly;
+            field.toggleAttribute('aria-readonly', readonly);
+        };
+
+        const refresh = () => {
+            const option = select.selectedOptions[0];
+            const hasSelectedBranch = Boolean(option?.value);
+
+            if (hasSelectedBranch) {
+                if (name) name.value = option.dataset.pickupName || '';
+                if (phone) phone.value = option.dataset.pickupPhone || '';
+                if (address) address.value = option.dataset.pickupAddress || '';
+                if (latitude) latitude.value = option.dataset.pickupLatitude || '';
+                if (longitude) longitude.value = option.dataset.pickupLongitude || '';
+                if (status) status.textContent = `Pickup loaded from ${option.textContent.trim()}.`;
+            } else {
+                if (hadSelectedBranch) {
+                    [name, phone, address, latitude, longitude].forEach((field) => {
+                        if (field) field.value = '';
+                    });
+                }
+
+                if (status) status.textContent = 'No branch selected. Pickup coordinates will remain unavailable.';
+            }
+
+            [name, phone, address].forEach((field) => setReadonly(field, hasSelectedBranch));
+            hadSelectedBranch = hasSelectedBranch;
+        };
+
+        select.addEventListener('change', refresh);
+        form.querySelector('[data-business-select]')?.addEventListener('change', refresh);
+        refresh();
+    });
+}
+
 async function copyText(text) {
     if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -220,6 +269,30 @@ function initializeDialogs(root) {
     });
 }
 
+function initializeCustomerResolution(root) {
+    const resolution = root.querySelector('[data-customer-resolution]');
+    const existingField = root.querySelector('[data-existing-customer-field]');
+    const customer = existingField?.querySelector('select');
+
+    if (!resolution || !existingField || !customer) {
+        return;
+    }
+
+    const refresh = () => {
+        const usesExistingCustomer = resolution.value === 'existing';
+        existingField.hidden = !usesExistingCustomer;
+        customer.disabled = !usesExistingCustomer;
+        customer.required = usesExistingCustomer;
+
+        if (!usesExistingCustomer) {
+            customer.value = '';
+        }
+    };
+
+    resolution.addEventListener('change', refresh);
+    refresh();
+}
+
 export function initializePortal() {
     const root = document.querySelector('[data-portal]');
 
@@ -231,6 +304,8 @@ export function initializePortal() {
     initializeSubmittingForms(root);
     initializeDeliveryItems(root);
     initializeDeliverySelectors(root);
+    initializeBranchPickupDefaults(root);
     initializeTrackingLink(root);
     initializeDialogs(root);
+    initializeCustomerResolution(root);
 }

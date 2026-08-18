@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\DeliveryWorkflowException;
+use App\Models\BusinessBranch;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Delivery;
@@ -175,6 +176,33 @@ class DeliveryManagementService
     }
 
     /**
+     * Create a delivery for an authoritative customer while saving a new destination address.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function createForCustomer(
+        array $payload,
+        int|string $businessId,
+        ?User $user,
+        Customer $customer
+    ): Delivery {
+        $delivery = DB::transaction(function () use ($payload, $businessId, $user, $customer): Delivery {
+            $customer = Customer::query()
+                ->whereKey($customer->getKey())
+                ->where('business_id', $businessId)
+                ->where('status', 'active')
+                ->firstOrFail();
+            $address = $this->createCustomerAddressFromDropoff($payload, $businessId, $customer);
+            $payload['customer_id'] = $customer->getKey();
+            $payload['customer_address_id'] = $address?->getKey();
+
+            return $this->persistDelivery($payload, $businessId, $user, $customer, $address);
+        });
+
+        return $delivery->load($this->relations());
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     public function update(Delivery $delivery, array $payload, ?User $user): Delivery
@@ -194,6 +222,7 @@ class DeliveryManagementService
 
             $fromStatus = $lockedDelivery->status;
             $deliveryData = $this->deliveryPayload($payload);
+            $this->applyBranchPickupDefaults($deliveryData, $lockedDelivery->business_id);
 
             if (array_key_exists('assigned_driver_id', $deliveryData)
                 && $deliveryData['assigned_driver_id'] !== $lockedDelivery->assigned_driver_id
@@ -320,6 +349,7 @@ class DeliveryManagementService
         ?CustomerAddress $address
     ): Delivery {
         $deliveryData = $this->deliveryPayload($payload);
+        $this->applyBranchPickupDefaults($deliveryData, $businessId);
         $this->applyCustomerDefaults($deliveryData, $customer);
         $this->applyAddressDefaults($deliveryData, $address);
 
@@ -384,6 +414,31 @@ class DeliveryManagementService
     {
         $deliveryData['dropoff_name'] = $deliveryData['dropoff_name'] ?? $customer->name;
         $deliveryData['dropoff_phone'] = $deliveryData['dropoff_phone'] ?? $customer->phone;
+    }
+
+    /**
+     * Use the selected active branch as the authoritative pickup location.
+     *
+     * @param  array<string, mixed>  $deliveryData
+     */
+    private function applyBranchPickupDefaults(array &$deliveryData, int|string $businessId): void
+    {
+        if (empty($deliveryData['branch_id'])) {
+            return;
+        }
+
+        $branch = BusinessBranch::query()
+            ->with('business')
+            ->whereKey($deliveryData['branch_id'])
+            ->where('business_id', $businessId)
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        $deliveryData['pickup_name'] = $branch->name;
+        $deliveryData['pickup_phone'] = $branch->phone ?? $branch->business?->phone;
+        $deliveryData['pickup_address'] = $branch->pickupAddress();
+        $deliveryData['pickup_latitude'] = $branch->latitude;
+        $deliveryData['pickup_longitude'] = $branch->longitude;
     }
 
     /**

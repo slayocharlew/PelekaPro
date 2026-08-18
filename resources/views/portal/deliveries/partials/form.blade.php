@@ -1,6 +1,7 @@
 @php
     $editing = isset($delivery);
     $selectedBusinessId = old('business_id', $editing ? $delivery->business_id : auth('web')->user()->business_id);
+    $selectedBranchId = old('branch_id', $editing ? $delivery->branch_id : auth('web')->user()->branch_id);
     $itemRows = old('items', $editing
         ? $delivery->items->map(fn ($item) => [
             'item_name' => $item->item_name,
@@ -21,12 +22,8 @@
 <section class="portal-card portal-form-section">
     <div class="portal-card__header">
         <div>
-            <p class="portal-eyebrow">Customer</p>
             <h2>{{ $editing ? 'Customer and branch' : 'Enter customer details' }}</h2>
         </div>
-        @unless ($editing)
-            <p>The customer will be saved to your business when this delivery is created.</p>
-        @endunless
     </div>
 
     <div class="portal-form-grid">
@@ -47,10 +44,19 @@
 
         <div class="portal-field">
             <label for="branch_id">Branch</label>
-            <select id="branch_id" name="branch_id" data-business-option-list>
+            <select id="branch_id" name="branch_id" data-business-option-list data-branch-pickup-select>
                 <option value="">No branch</option>
                 @foreach ($branches as $branch)
-                    <option value="{{ $branch->id }}" data-business-id="{{ $branch->business_id }}" @selected((string) old('branch_id', $editing ? $delivery->branch_id : '') === (string) $branch->id)>
+                    <option
+                        value="{{ $branch->id }}"
+                        data-business-id="{{ $branch->business_id }}"
+                        data-pickup-name="{{ $branch->name }}"
+                        data-pickup-phone="{{ $branch->phone ?? $branch->business?->phone }}"
+                        data-pickup-address="{{ $branch->pickupAddress() }}"
+                        data-pickup-latitude="{{ $branch->latitude }}"
+                        data-pickup-longitude="{{ $branch->longitude }}"
+                        @selected((string) $selectedBranchId === (string) $branch->id)
+                    >
                         {{ $branch->name }}
                     </option>
                 @endforeach
@@ -96,10 +102,8 @@
 <section class="portal-card portal-form-section">
     <div class="portal-card__header">
         <div>
-            <p class="portal-eyebrow">Route details</p>
             <h2>Pickup and drop-off</h2>
         </div>
-        <p>Coordinates confirm a precise destination when available.</p>
     </div>
 
     <div class="portal-form-columns">
@@ -107,31 +111,24 @@
             <legend>Pickup</legend>
             <div class="portal-field">
                 <label for="pickup_name">Contact name</label>
-                <input id="pickup_name" name="pickup_name" type="text" maxlength="255" value="{{ old('pickup_name', $editing ? $delivery->pickup_name : '') }}">
+                <input id="pickup_name" name="pickup_name" type="text" maxlength="255" value="{{ old('pickup_name', $editing ? $delivery->pickup_name : '') }}" data-pickup-name-field>
                 @error('pickup_name') <p class="portal-field__error">{{ $message }}</p> @enderror
             </div>
             <div class="portal-field">
                 <label for="pickup_phone">Contact phone</label>
-                <input id="pickup_phone" name="pickup_phone" type="tel" maxlength="255" value="{{ old('pickup_phone', $editing ? $delivery->pickup_phone : '') }}">
+                <input id="pickup_phone" name="pickup_phone" type="tel" maxlength="255" value="{{ old('pickup_phone', $editing ? $delivery->pickup_phone : '') }}" data-pickup-phone-field>
                 @error('pickup_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
             </div>
             <div class="portal-field">
                 <label for="pickup_address">Address</label>
-                <textarea id="pickup_address" name="pickup_address" rows="3">{{ old('pickup_address', $editing ? $delivery->pickup_address : '') }}</textarea>
+                <textarea id="pickup_address" name="pickup_address" rows="3" data-pickup-address-field>{{ old('pickup_address', $editing ? $delivery->pickup_address : '') }}</textarea>
                 @error('pickup_address') <p class="portal-field__error">{{ $message }}</p> @enderror
             </div>
-            <div class="portal-coordinate-grid">
-                <div class="portal-field">
-                    <label for="pickup_latitude">Latitude</label>
-                    <input id="pickup_latitude" name="pickup_latitude" type="number" step="0.0000001" min="-90" max="90" value="{{ old('pickup_latitude', $editing ? $delivery->pickup_latitude : '') }}">
-                    @error('pickup_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror
-                </div>
-                <div class="portal-field">
-                    <label for="pickup_longitude">Longitude</label>
-                    <input id="pickup_longitude" name="pickup_longitude" type="number" step="0.0000001" min="-180" max="180" value="{{ old('pickup_longitude', $editing ? $delivery->pickup_longitude : '') }}">
-                    @error('pickup_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror
-                </div>
-            </div>
+            <input id="pickup_latitude" name="pickup_latitude" type="hidden" value="{{ old('pickup_latitude', $editing ? $delivery->pickup_latitude : '') }}" data-pickup-latitude-field>
+            <input id="pickup_longitude" name="pickup_longitude" type="hidden" value="{{ old('pickup_longitude', $editing ? $delivery->pickup_longitude : '') }}" data-pickup-longitude-field>
+            <p class="portal-field__hint" data-branch-pickup-status role="status" aria-live="polite">Select a branch to load its saved pickup location.</p>
+            @error('pickup_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+            @error('pickup_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror
         </fieldset>
 
         <fieldset class="portal-fieldset">
@@ -170,7 +167,6 @@
 <section class="portal-card portal-form-section">
     <div class="portal-card__header">
         <div>
-            <p class="portal-eyebrow">Contents</p>
             <h2>Delivery items</h2>
         </div>
         <button class="portal-button portal-button--secondary portal-button--small" type="button" data-add-delivery-item>Add item</button>
@@ -236,10 +232,8 @@
 <section class="portal-card portal-form-section">
     <div class="portal-card__header">
         <div>
-            <p class="portal-eyebrow">Payment</p>
             <h2>Collection details</h2>
         </div>
-        <p>The selected method remains authoritative for the driver workflow.</p>
     </div>
 
     <div class="portal-form-grid">

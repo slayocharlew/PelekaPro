@@ -6,7 +6,6 @@
     <div class="portal-page-heading">
         <div>
             <a class="portal-back-link" href="{{ route('portal.deliveries.index') }}">← Back to deliveries</a>
-            <p class="portal-eyebrow">Delivery detail</p>
             <div class="portal-heading-line">
                 <h1>{{ $delivery->delivery_number }}</h1>
                 @include('portal.partials.status-badge', ['status' => $delivery->status])
@@ -28,7 +27,6 @@
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Customer</p>
                         <h2>Recipient and location</h2>
                     </div>
                 </div>
@@ -90,7 +88,6 @@
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Contents</p>
                         <h2>Delivery items</h2>
                     </div>
                     <span>{{ $delivery->items->count() }} {{ str('item')->plural($delivery->items->count()) }}</span>
@@ -114,7 +111,6 @@
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Timeline</p>
                         <h2>Status history</h2>
                     </div>
                 </div>
@@ -142,7 +138,6 @@
             <section id="driver-assignment" class="portal-card portal-sticky-card">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Driver</p>
                         <h2>Assignment</h2>
                     </div>
                 </div>
@@ -197,7 +192,6 @@
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Payment</p>
                         <h2>Payment summary</h2>
                     </div>
                 </div>
@@ -213,7 +207,6 @@
             <section class="portal-card portal-tracking-link">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Customer access</p>
                         <h2>Secure tracking link</h2>
                     </div>
                 </div>
@@ -236,7 +229,6 @@
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <p class="portal-eyebrow">Record</p>
                         <h2>Timestamps</h2>
                     </div>
                 </div>
@@ -257,7 +249,6 @@
             <form method="POST" action="{{ route('portal.deliveries.cancel', $delivery) }}" data-submitting-form>
                 @csrf
                 <div class="portal-dialog__heading">
-                    <p class="portal-eyebrow">Confirm action</p>
                     <h2>Cancel this delivery?</h2>
                     <p>Cancellation closes any active tracking session and removes the temporary live-location state.</p>
                 </div>

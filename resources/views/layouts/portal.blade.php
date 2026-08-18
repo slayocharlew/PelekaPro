@@ -37,6 +37,20 @@
                         >
                             Deliveries
                         </a>
+                        <a
+                            href="{{ route('portal.delivery-requests.index') }}"
+                            @class(['portal-nav__link', 'is-active' => request()->routeIs('portal.delivery-requests.*')])
+                        >
+                            Requests
+                        </a>
+                        @if (auth('web')->user()->isSuperAdmin())
+                            <a
+                                href="{{ route('portal.businesses.index') }}"
+                                @class(['portal-nav__link', 'is-active' => request()->routeIs('portal.businesses.*')])
+                            >
+                                Businesses
+                            </a>
+                        @endif
                     </nav>
 
                     <div class="portal-user">
@@ -69,6 +83,10 @@
 
                     @if ($errors->has('delivery'))
                         <div class="portal-alert portal-alert--error" role="alert">{{ $errors->first('delivery') }}</div>
+                    @endif
+
+                    @if ($errors->has('delivery_request'))
+                        <div class="portal-alert portal-alert--error" role="alert">{{ $errors->first('delivery_request') }}</div>
                     @endif
 
                     @yield('content')

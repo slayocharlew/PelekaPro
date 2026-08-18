@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Middleware\AddCustomerDeliveryRequestSecurityHeaders;
 use App\Http\Middleware\AddCustomerTrackingSecurityHeaders;
 use App\Http\Middleware\EnsureActiveApiUser;
 use App\Http\Middleware\EnsureActiveWebUser;
 use App\Http\Middleware\EnsureBusinessScope;
+use App\Http\Middleware\EnsureCustomerDeliveryRequestAccess;
 use App\Http\Middleware\EnsureCustomerTrackingAccess;
 use App\Http\Middleware\EnsureDriverAssignedDelivery;
 use App\Http\Middleware\EnsureUserHasRole;
@@ -26,6 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ThrottleRequests::class,
             AddCustomerTrackingSecurityHeaders::class
         );
+        $middleware->prependToPriorityList(
+            ThrottleRequests::class,
+            AddCustomerDeliveryRequestSecurityHeaders::class
+        );
 
         $middleware->alias([
             'active.api.user' => EnsureActiveApiUser::class,
@@ -35,6 +41,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'driver.delivery' => EnsureDriverAssignedDelivery::class,
             'customer.tracking' => EnsureCustomerTrackingAccess::class,
             'customer.tracking.headers' => AddCustomerTrackingSecurityHeaders::class,
+            'customer.delivery-request' => EnsureCustomerDeliveryRequestAccess::class,
+            'customer.delivery-request.headers' => AddCustomerDeliveryRequestSecurityHeaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

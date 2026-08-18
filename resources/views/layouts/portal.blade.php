@@ -51,6 +51,14 @@
                                 Businesses
                             </a>
                         @endif
+                        @if (auth('web')->user()->isBusinessOwner())
+                            <a
+                                href="{{ route('portal.settings.edit') }}"
+                                @class(['portal-nav__link', 'is-active' => request()->routeIs('portal.settings.*')])
+                            >
+                                Settings
+                            </a>
+                        @endif
                     </nav>
 
                     <div class="portal-user">

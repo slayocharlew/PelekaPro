@@ -20,7 +20,7 @@ function locationMarker() {
 }
 
 export function initializeBusinessOnboarding() {
-    const form = document.querySelector('[data-business-onboarding]');
+    const form = document.querySelector('[data-branch-location-form]');
 
     if (!form) {
         return;
@@ -124,13 +124,18 @@ export function initializeBusinessOnboarding() {
     });
 
     form.addEventListener('submit', (event) => {
+        if (form.dataset.locationRequired !== 'true') {
+            return;
+        }
+
         if (validCoordinate(latitudeInput.value, -90, 90)
             && validCoordinate(longitudeInput.value, -180, 180)) {
             return;
         }
 
         event.preventDefault();
-        if (status) status.textContent = 'Select the main branch location before registering the business.';
+        if (status) status.textContent = form.dataset.locationRequiredMessage
+            || 'Select the main branch location before saving.';
         mapElement.focus();
     });
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\CustomerDeliveryRequestController;
 use App\Http\Controllers\CustomerTrackingController;
 use App\Http\Controllers\Portal\BusinessController as PortalBusinessController;
+use App\Http\Controllers\Portal\BusinessSettingsController as PortalBusinessSettingsController;
 use App\Http\Controllers\Portal\CustomerDeliveryRequestController as PortalCustomerDeliveryRequestController;
 use App\Http\Controllers\Portal\DeliveryController as PortalDeliveryController;
 use App\Http\Controllers\PortalAuthController;
@@ -40,6 +41,9 @@ Route::middleware(['auth:web', 'active.web.user', 'role:super_admin,business_own
         Route::post('/delivery-requests/{customerDeliveryRequest}/regenerate-link', [PortalCustomerDeliveryRequestController::class, 'regenerate'])->name('delivery-requests.regenerate');
         Route::post('/delivery-requests/{customerDeliveryRequest}/revoke', [PortalCustomerDeliveryRequestController::class, 'revoke'])->name('delivery-requests.revoke');
         Route::post('/delivery-requests/{customerDeliveryRequest}/create-delivery', [PortalCustomerDeliveryRequestController::class, 'convert'])->name('delivery-requests.convert');
+
+        Route::get('/settings', [PortalBusinessSettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('/settings/shop-location', [PortalBusinessSettingsController::class, 'update'])->name('settings.shop-location.update');
 
         Route::middleware('role:super_admin')->group(function (): void {
             Route::get('/businesses', [PortalBusinessController::class, 'index'])->name('businesses.index');

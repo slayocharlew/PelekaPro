@@ -45,8 +45,8 @@ final class BusinessOnboardingService
                 'ward' => $branchData['ward'] ?? null,
                 'street' => $branchData['street'] ?? null,
                 'address' => $branchData['address'],
-                'latitude' => $branchData['latitude'],
-                'longitude' => $branchData['longitude'],
+                'latitude' => $branchData['latitude'] ?? null,
+                'longitude' => $branchData['longitude'] ?? null,
                 'status' => 'active',
             ]);
 

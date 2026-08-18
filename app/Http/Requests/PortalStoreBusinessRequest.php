@@ -36,8 +36,8 @@ class PortalStoreBusinessRequest extends FormRequest
             'branch.ward' => ['nullable', 'string', 'max:255'],
             'branch.street' => ['nullable', 'string', 'max:255'],
             'branch.address' => ['required', 'string', 'max:2000'],
-            'branch.latitude' => ['required', 'numeric', 'between:-90,90'],
-            'branch.longitude' => ['required', 'numeric', 'between:-180,180'],
+            'branch.latitude' => ['nullable', 'required_with:branch.longitude', 'numeric', 'between:-90,90'],
+            'branch.longitude' => ['nullable', 'required_with:branch.latitude', 'numeric', 'between:-180,180'],
 
             'owner' => ['required', 'array'],
             'owner.name' => ['required', 'string', 'max:255'],

@@ -54,3 +54,19 @@ test('portal pickup fields use branch data and hide raw pickup coordinates', asy
     assert.match(deliveryForm, /name="pickup_latitude" type="hidden"/);
     assert.match(requestReview, /name="pickup_latitude" type="hidden"/);
 });
+
+test('owner settings requires a map pin while super-admin onboarding may defer it', async () => {
+    const [source, onboarding, settings] = await Promise.all([
+        readFile(new URL('../../resources/js/business-onboarding.js', import.meta.url), 'utf8'),
+        readFile(new URL('../../resources/views/portal/businesses/create.blade.php', import.meta.url), 'utf8'),
+        readFile(new URL('../../resources/views/portal/settings/edit.blade.php', import.meta.url), 'utf8'),
+    ]);
+
+    assert.match(source, /form\.dataset\.locationRequired !== 'true'/);
+    assert.match(onboarding, /data-location-required="false"/);
+    assert.match(settings, /data-location-required="true"/);
+    assert.match(settings, /method="POST"/);
+    assert.match(settings, /@method\('PUT'\)/);
+    assert.equal(settings.includes('name="business_id"'), false);
+    assert.equal(settings.includes('name="branch_id"'), false);
+});

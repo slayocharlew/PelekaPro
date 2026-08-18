@@ -21,6 +21,8 @@
         method="POST"
         action="{{ route('portal.businesses.store') }}"
         data-business-onboarding
+        data-branch-location-form
+        data-location-required="false"
         data-submitting-form
     >
         @csrf
@@ -62,7 +64,7 @@
             <div class="portal-card__header">
                 <div>
                     <h2>Main pickup branch</h2>
-                    <p>This saved location will fill delivery pickup information automatically.</p>
+                    <p>Add the shop pin now, or the owner can complete it later from Business Settings.</p>
                 </div>
             </div>
             <div class="portal-form-grid">
@@ -105,7 +107,7 @@
 
             <div class="portal-location-controls">
                 <button class="portal-button portal-button--secondary" type="button" data-use-branch-current-location>Use my current location</button>
-                <p id="branch-location-status" data-branch-location-status role="status" aria-live="polite">Tap the map or use the current location to place the main branch pin.</p>
+                <p id="branch-location-status" data-branch-location-status role="status" aria-live="polite">The map pin is optional during registration. Tap the map or use the current location to add it now.</p>
             </div>
             <div class="portal-location-map" data-branch-location-map role="application" tabindex="0" aria-label="Select main branch location" aria-describedby="branch-location-status"></div>
             <input name="branch[latitude]" type="hidden" value="{{ old('branch.latitude') }}" data-branch-latitude>

@@ -139,6 +139,25 @@ class PortalBusinessOnboardingTest extends TestCase
         $this->assertSame(1, User::query()->count());
     }
 
+    public function test_super_admin_can_leave_map_coordinates_for_owner_to_complete_later(): void
+    {
+        $this->role('business_owner');
+        $superAdmin = $this->user('super_admin');
+        $payload = $this->onboardingPayload();
+        $payload['branch']['latitude'] = null;
+        $payload['branch']['longitude'] = null;
+
+        $this->actingAs($superAdmin, 'web')
+            ->post(route('portal.businesses.store'), $payload)
+            ->assertRedirect();
+
+        $branch = BusinessBranch::query()->sole();
+        $owner = User::query()->where('email', 'owner@kijitonyama.test')->sole();
+        $this->assertNull($branch->latitude);
+        $this->assertNull($branch->longitude);
+        $this->assertSame($branch->id, $owner->branch_id);
+    }
+
     public function test_owner_main_branch_is_the_server_authoritative_delivery_pickup(): void
     {
         $business = $this->business('Pickup Business');

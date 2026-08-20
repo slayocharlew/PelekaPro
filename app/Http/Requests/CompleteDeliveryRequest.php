@@ -23,7 +23,6 @@ class CompleteDeliveryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'delivery_pin' => ['nullable', 'string', 'max:10'],
             'receiver_name' => ['nullable', 'string', 'max:255'],
             'receiver_phone' => ['nullable', 'string', 'max:255'],
             'proof_type' => ['nullable', 'required_with:proof_file', Rule::in(['photo', 'signature'])],
@@ -45,14 +44,6 @@ class CompleteDeliveryRequest extends FormRequest
 
             if (! $delivery instanceof Delivery) {
                 return;
-            }
-
-            if ($delivery->delivery_pin !== null && ! $this->filled('delivery_pin')) {
-                $validator->errors()->add('delivery_pin', 'The delivery PIN is required.');
-            }
-
-            if ($delivery->delivery_pin !== null && $this->filled('delivery_pin') && ! hash_equals((string) $delivery->delivery_pin, (string) $this->input('delivery_pin'))) {
-                $validator->errors()->add('delivery_pin', 'The delivery PIN is incorrect.');
             }
 
             $payment = $delivery->payment()->first();

@@ -100,7 +100,6 @@ class PortalConvertCustomerDeliveryRequestRequest extends FormRequest
             'delivery_number',
             'tracking_code',
             'public_tracking_token',
-            'delivery_pin',
             'tracking_session_id',
         ] as $field) {
             $this->request->remove($field);

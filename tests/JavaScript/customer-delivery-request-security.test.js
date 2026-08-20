@@ -2,19 +2,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('delivery request frontend uses OpenStreetMap and accepts GPS or a draggable map pin', async () => {
+test('delivery request frontend uses Google Maps and accepts GPS or a draggable map pin', async () => {
     const source = await readFile(
         new URL('../../resources/js/delivery-request.js', import.meta.url),
         'utf8'
     );
 
-    assert.equal(source.includes("from 'leaflet'"), true);
-    assert.equal(source.includes('https://tile.openstreetmap.org/{z}/{x}/{y}.png'), true);
-    assert.equal(source.includes('OpenStreetMap</a> contributors'), true);
-    assert.equal(source.includes("referrerPolicy: 'origin'"), true);
+    assert.equal(source.includes('loadGoogleMaps'), true);
+    assert.equal(source.includes('AdvancedMarkerElement'), true);
     assert.equal(source.includes('navigator.geolocation.getCurrentPosition'), true);
-    assert.equal(source.includes('draggable: true'), true);
-    assert.equal(source.includes("map.on('click'"), true);
+    assert.equal(source.includes('gmpDraggable: true'), true);
+    assert.equal(source.includes("map.addListener('click'"), true);
+    assert.equal(source.includes('Map temporarily unavailable'), true);
     assert.equal(source.includes('dropoff_latitude'), false);
     assert.equal(source.includes('dropoff_longitude'), false);
 });
@@ -38,6 +37,9 @@ test('delivery request frontend sends no ownership credential and persists nothi
     ]) {
         assert.equal(source.includes(forbidden), false);
     }
+
+    assert.equal(source.includes('VITE_GOOGLE_MAPS_API_KEY'), false);
+    assert.equal(source.includes('VITE_GOOGLE_MAPS_MAP_ID'), false);
 });
 
 test('delivery request session deletion is DELETE-only, CSRF protected, and same origin', async () => {

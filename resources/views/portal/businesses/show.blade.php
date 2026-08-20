@@ -39,7 +39,7 @@
                             <span>{{ $branch->phone ?: 'No phone' }}</span>
                             <span>
                                 @if ($branch->latitude !== null && $branch->longitude !== null)
-                                    <a href="https://www.openstreetmap.org/?mlat={{ $branch->latitude }}&mlon={{ $branch->longitude }}#map=18/{{ $branch->latitude }}/{{ $branch->longitude }}" target="_blank" rel="noopener noreferrer">View map</a>
+                                    <a href="https://www.google.com/maps/search/?api=1&amp;query={{ $branch->latitude }},{{ $branch->longitude }}" target="_blank" rel="noopener noreferrer">View map</a>
                                 @else
                                     Location missing
                                 @endif

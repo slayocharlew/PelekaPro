@@ -172,7 +172,6 @@ class PortalCustomerDeliveryRequestTest extends TestCase
             'delivery_number' => 'BROWSER-CONTROLLED',
             'tracking_code' => 'BROWSER-TRACKING',
             'public_tracking_token' => 'browser-public-token',
-            'delivery_pin' => '000000',
             'customer_email' => 'ignored@example.test',
         ]);
 
@@ -202,7 +201,6 @@ class PortalCustomerDeliveryRequestTest extends TestCase
         $this->assertNotSame('BROWSER-TRACKING', $delivery->tracking_code);
         $this->assertNotSame('browser-public-token', $delivery->public_tracking_token);
         $this->assertNotSame($issued['token'], $delivery->public_tracking_token);
-        $this->assertNotSame('000000', $delivery->delivery_pin);
         $this->assertDatabaseHas('customers', [
             'id' => $delivery->customer_id,
             'business_id' => $business->id,

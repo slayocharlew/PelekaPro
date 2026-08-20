@@ -60,7 +60,6 @@ class DriverDeliveryResource extends JsonResource
                 ] : null),
             ],
             'requirements' => [
-                'pin_required' => $this->delivery_pin !== null,
                 'proof_supported' => true,
                 'available_proof_types' => ['photo', 'signature'],
             ],

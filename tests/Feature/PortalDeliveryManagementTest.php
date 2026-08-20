@@ -98,7 +98,6 @@ class PortalDeliveryManagementTest extends TestCase
             'delivery_number' => 'BROWSER-CONTROLLED',
             'tracking_code' => 'BROWSER-TRACKING',
             'public_tracking_token' => 'browser-public-token',
-            'delivery_pin' => '000000',
             'status' => 'delivered',
             'dropoff_address' => 'Mikocheni, Dar es Salaam',
             'dropoff_latitude' => -6.7750000,
@@ -129,7 +128,6 @@ class PortalDeliveryManagementTest extends TestCase
         $this->assertNotSame('BROWSER-CONTROLLED', $delivery->delivery_number);
         $this->assertNotSame('BROWSER-TRACKING', $delivery->tracking_code);
         $this->assertNotSame('browser-public-token', $delivery->public_tracking_token);
-        $this->assertNotSame('000000', $delivery->delivery_pin);
         $this->assertDatabaseHas('customers', [
             'id' => $customer->id,
             'business_id' => $business->id,
@@ -202,8 +200,7 @@ class PortalDeliveryManagementTest extends TestCase
             ->get(route('portal.deliveries.show', $delivery))
             ->assertOk()
             ->assertSee(route('customer.tracking.enter', $delivery->public_tracking_token), false)
-            ->assertSee('Status history')
-            ->assertDontSee($delivery->delivery_pin);
+            ->assertSee('Status history');
 
         $this->actingAs($owner, 'web')
             ->get(route('portal.deliveries.show', $otherDelivery))
@@ -459,7 +456,6 @@ class PortalDeliveryManagementTest extends TestCase
             'delivery_number' => 'PD-PORTAL-'.Str::upper(Str::random(8)),
             'tracking_code' => 'TRK-'.Str::upper(Str::random(10)),
             'public_tracking_token' => Str::random(80),
-            'delivery_pin' => (string) random_int(100000, 999999),
             'status' => $status,
             'dropoff_name' => $customer->name,
             'dropoff_phone' => $customer->phone,

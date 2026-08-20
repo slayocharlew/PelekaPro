@@ -30,7 +30,6 @@ final class CustomerDeliveryRequestSessionService
         'delivery_id',
         'driver_id',
         'status',
-        'delivery_pin',
         'tracking_session_id',
     ];
 

@@ -22,11 +22,6 @@ class DeliveryNumberService
         return $this->unique('public_tracking_token', fn (): string => Str::random(80));
     }
 
-    public function deliveryPin(): string
-    {
-        return (string) random_int(100000, 999999);
-    }
-
     private function unique(string $column, callable $generator): string
     {
         do {

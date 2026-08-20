@@ -78,26 +78,45 @@ test('frontend source exposes no Reverb secret or application key', async () => 
     assert.equal(combined.includes('VITE_REVERB_APP_KEY'), true);
 });
 
-test('OpenStreetMap uses attributed tiles with only the token-free page origin', async () => {
-    const [mapSource, pageSource, environmentExample, packageSource] = await Promise.all([
+test('Google Maps uses a restricted browser configuration without tracking credentials', async () => {
+    const [mapSource, loaderSource, pageSource, environmentExample, packageSource] = await Promise.all([
         '../../resources/js/tracking/map-adapter.js',
+        '../../resources/js/maps/google-maps-loader.js',
         '../../resources/js/tracking/customer-tracking.js',
         '../../.env.example',
         '../../package.json',
     ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')));
-    const frontendConfiguration = [mapSource, pageSource, environmentExample].join('\n');
+    const frontendConfiguration = [mapSource, loaderSource, pageSource, environmentExample].join('\n');
     const packageConfiguration = JSON.parse(packageSource);
 
-    assert.equal(mapSource.includes("from 'leaflet'"), true);
-    assert.equal(mapSource.includes('https://tile.openstreetmap.org/{z}/{x}/{y}.png'), true);
-    assert.equal(mapSource.includes('OpenStreetMap</a> contributors'), true);
-    assert.equal(mapSource.includes("referrerPolicy: 'origin'"), true);
-    assert.equal(packageConfiguration.dependencies.leaflet, '^1.9.4');
-    assert.equal(frontendConfiguration.includes('maps.googleapis.com'), false);
-    assert.equal(frontendConfiguration.includes('google.maps'), false);
-    assert.equal(frontendConfiguration.includes('VITE_GOOGLE_MAPS_API_KEY'), false);
+    assert.equal(mapSource.includes('AdvancedMarkerElement'), true);
+    assert.equal(loaderSource.includes('https://maps.googleapis.com/maps/api/js'), true);
+    assert.equal(loaderSource.includes("script.referrerPolicy = 'origin'"), true);
+    assert.equal(loaderSource.includes("auth_referrer_policy: 'origin'"), true);
+    assert.equal(loaderSource.includes("importLibrary('maps')"), true);
+    assert.equal(loaderSource.includes("importLibrary('marker')"), true);
+    assert.equal(loaderSource.includes("importLibrary('places')"), false);
+    assert.equal(loaderSource.includes("importLibrary('routes')"), false);
+    assert.equal(packageConfiguration.dependencies?.leaflet, undefined);
+    assert.equal(frontendConfiguration.includes('VITE_GOOGLE_MAPS_API_KEY'), true);
+    assert.equal(frontendConfiguration.includes('VITE_GOOGLE_MAPS_MAP_ID'), true);
     assert.equal(frontendConfiguration.includes('public_tracking_token'), false);
     assert.equal(frontendConfiguration.includes('/track/'), false);
+    assert.equal(frontendConfiguration.includes('openstreetmap.org'), false);
+});
+
+test('customer map loads lazily for a fresh location and reuses one map instance', async () => {
+    const [pageSource, mapSource] = await Promise.all([
+        '../../resources/js/tracking/customer-tracking.js',
+        '../../resources/js/tracking/map-adapter.js',
+    ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')));
+
+    assert.match(pageSource, /const mapAvailable = await this\.map\.initialize\(\)/);
+    assert.equal(pageSource.includes('this.mapReady = this.map.initialize()'), false);
+    assert.match(mapSource, /if \(this\.map\) \{\s+return true;/);
+    assert.match(mapSource, /if \(!this\.initialization\)/);
+    assert.match(mapSource, /this\.marker\.position = googlePosition/);
+    assert.equal(mapSource.includes('new window.google.maps.Marker'), false);
 });
 
 test('service worker uses network-only tracking routes and caches static assets only', async () => {

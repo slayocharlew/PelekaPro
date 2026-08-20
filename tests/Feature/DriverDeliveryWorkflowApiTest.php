@@ -12,6 +12,7 @@ use App\Models\FailedDeliveryReason;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -31,13 +32,20 @@ class DriverDeliveryWorkflowApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $delivery->id)
-            ->assertJsonPath('data.requirements.pin_required', true)
             ->assertJsonFragment(['id' => $reason->id, 'name' => $reason->name]);
 
         $payload = $response->json('data');
 
+        $this->assertArrayNotHasKey('pin_required', $payload['requirements']);
         $this->assertArrayNotHasKey('delivery_pin', $payload);
         $this->assertArrayNotHasKey('public_tracking_token', $payload);
+    }
+
+    public function test_delivery_pin_fields_are_removed_from_the_schema(): void
+    {
+        $this->assertFalse(Schema::hasColumn('deliveries', 'delivery_pin'));
+        $this->assertFalse(Schema::hasColumn('delivery_proofs', 'pin_verified'));
+        $this->assertFalse(Schema::hasColumn('delivery_proofs', 'entered_pin'));
     }
 
     public function test_driver_cannot_view_or_start_another_drivers_delivery(): void
@@ -120,7 +128,7 @@ class DriverDeliveryWorkflowApiTest extends TestCase
         }
     }
 
-    public function test_assigned_driver_can_mark_active_delivery_delivered_with_correct_pin_and_payment_sync(): void
+    public function test_assigned_driver_can_mark_active_delivery_delivered_and_sync_payment(): void
     {
         $business = $this->business();
         $driver = $this->driver($business);
@@ -128,7 +136,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'receiver_name' => 'Receiver One',
                 'receiver_phone' => '255700111222',
                 'collected_amount' => 5000,
@@ -148,7 +155,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
             'delivery_id' => $delivery->id,
             'driver_id' => $driver->id,
             'recipient_name' => 'Receiver One',
-            'pin_verified' => true,
         ]);
 
         $this->assertDatabaseHas('delivery_payments', [
@@ -172,7 +178,7 @@ class DriverDeliveryWorkflowApiTest extends TestCase
             ->count());
     }
 
-    public function test_incorrect_pin_blocks_delivery_completion(): void
+    public function test_delivery_completion_does_not_require_a_pin(): void
     {
         $business = $this->business();
         $driver = $this->driver($business);
@@ -180,18 +186,17 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '000000',
                 'collected_amount' => 5000,
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('success', false);
+            ->assertOk()
+            ->assertJsonPath('data.status', 'delivered');
 
-        $this->assertDatabaseMissing('deliveries', [
+        $this->assertDatabaseHas('deliveries', [
             'id' => $delivery->id,
             'status' => 'delivered',
         ]);
 
-        $this->assertSame(1, DeliveryTrackingSession::query()
+        $this->assertSame(0, DeliveryTrackingSession::query()
             ->where('delivery_id', $delivery->id)
             ->where('status', 'active')
             ->count());
@@ -205,14 +210,12 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertOk();
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertStatus(409)
@@ -285,7 +288,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($otherBusinessDriver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertForbidden();
@@ -332,7 +334,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 3000,
             ])
             ->assertOk();
@@ -365,7 +366,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
             ])
             ->assertOk();
 
@@ -385,7 +385,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'payment_method' => 'none',
                 'collected_amount' => 5000,
             ])
@@ -411,7 +410,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 6000,
                 'expected_amount' => 1,
             ])
@@ -434,7 +432,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
 
         $this->actingAs($otherDriver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertForbidden();
@@ -525,7 +522,6 @@ class DriverDeliveryWorkflowApiTest extends TestCase
             'delivery_number' => 'PD-TEST-'.Str::upper(Str::random(8)),
             'tracking_code' => 'TRK-'.Str::upper(Str::random(10)),
             'public_tracking_token' => Str::random(80),
-            'delivery_pin' => '123456',
             'status' => $status,
             'pickup_name' => 'Main Shop',
             'pickup_phone' => '255700000001',

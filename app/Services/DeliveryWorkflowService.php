@@ -99,8 +99,6 @@ class DeliveryWorkflowService
                     'driver_id' => $driver->getKey(),
                     'recipient_name' => $payload['receiver_name'] ?? null,
                     'recipient_phone' => $payload['receiver_phone'] ?? null,
-                    'pin_verified' => $lockedDelivery->delivery_pin !== null,
-                    'entered_pin' => $payload['delivery_pin'] ?? null,
                     'delivered_latitude' => $payload['delivered_latitude'] ?? null,
                     'delivered_longitude' => $payload['delivered_longitude'] ?? null,
                     'note' => $payload['proof_note'] ?? $payload['note'] ?? null,

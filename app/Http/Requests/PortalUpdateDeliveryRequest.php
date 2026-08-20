@@ -26,7 +26,6 @@ class PortalUpdateDeliveryRequest extends UpdateDeliveryRequest
             'delivery_number',
             'tracking_code',
             'public_tracking_token',
-            'delivery_pin',
             'status',
             'tracking_session_id',
         ] as $field) {

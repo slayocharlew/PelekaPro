@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('business onboarding selects the main branch with OpenStreetMap or browser GPS', async () => {
-    const source = await readFile(
-        new URL('../../resources/js/business-onboarding.js', import.meta.url),
-        'utf8'
-    );
+test('business onboarding selects the main branch with Google Maps or browser GPS', async () => {
+    const [source, loader] = await Promise.all([
+        readFile(new URL('../../resources/js/business-onboarding.js', import.meta.url), 'utf8'),
+        readFile(new URL('../../resources/js/maps/google-maps-loader.js', import.meta.url), 'utf8'),
+    ]);
 
-    assert.match(source, /from 'leaflet'/);
-    assert.match(source, /https:\/\/tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
-    assert.match(source, /OpenStreetMap<\/a> contributors/);
-    assert.match(source, /referrerPolicy: 'origin'/);
+    assert.match(source, /loadGoogleMaps/);
+    assert.match(source, /AdvancedMarkerElement/);
+    assert.match(source, /gmpDraggable: true/);
     assert.match(source, /navigator\.geolocation\.getCurrentPosition/);
-    assert.match(source, /draggable: true/);
-    assert.match(source, /map\.on\('click'/);
+    assert.match(source, /map\.addListener\('click'/);
+    assert.match(source, /Map temporarily unavailable/);
+    assert.match(loader, /script\.referrerPolicy = 'origin'/);
 });
 
 test('business onboarding stores no credentials or location in browser storage', async () => {
@@ -30,11 +30,12 @@ test('business onboarding stores no credentials or location in browser storage',
         'localStorage',
         'sessionStorage',
         'indexedDB',
-        'google',
-        'API_KEY',
     ]) {
         assert.equal(source.includes(forbidden), false);
     }
+
+    assert.equal(source.includes('VITE_GOOGLE_MAPS_API_KEY'), false);
+    assert.equal(source.includes('VITE_GOOGLE_MAPS_MAP_ID'), false);
 });
 
 test('portal pickup fields use branch data and hide raw pickup coordinates', async () => {

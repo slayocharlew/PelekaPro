@@ -23,7 +23,6 @@ class Delivery extends Model
         'delivery_number',
         'tracking_code',
         'public_tracking_token',
-        'delivery_pin',
         'status',
         'pickup_name',
         'pickup_phone',

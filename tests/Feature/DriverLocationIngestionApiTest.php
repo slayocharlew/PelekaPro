@@ -365,7 +365,6 @@ class DriverLocationIngestionApiTest extends TestCase
             'delivery_number' => 'PD-TEST-'.Str::upper(Str::random(8)),
             'tracking_code' => 'TRK-'.Str::upper(Str::random(10)),
             'public_tracking_token' => Str::random(80),
-            'delivery_pin' => '123456',
             'status' => $status,
             'pickup_name' => 'Main Shop',
             'pickup_phone' => '255700000001',

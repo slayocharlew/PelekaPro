@@ -1,9 +1,11 @@
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import {
+    coordinateFromGoogle,
+    googlePosition,
+    loadGoogleMaps,
+} from './maps/google-maps-loader';
 
-const DEFAULT_CENTER = [-6.7924, 39.2083];
+const DEFAULT_CENTER = { lat: -6.7924, lng: 39.2083 };
 const MAX_ITEMS = 20;
-const OPENSTREETMAP_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -16,12 +18,12 @@ function validCoordinate(value, minimum, maximum) {
 }
 
 function locationMarker() {
-    return L.divIcon({
-        className: 'delivery-request-location-marker-shell',
-        html: '<span class="delivery-request-location-marker" aria-hidden="true"></span>',
-        iconSize: [34, 42],
-        iconAnchor: [17, 40],
-    });
+    const container = document.createElement('div');
+
+    container.className = 'map-location-marker-shell';
+    container.innerHTML = '<span class="map-location-marker" aria-hidden="true"></span>';
+
+    return container;
 }
 
 function initializeRequestItems(root) {
@@ -84,7 +86,7 @@ function initializeRequestItems(root) {
     refresh();
 }
 
-function initializeRequestMap(root) {
+async function initializeRequestMap(root) {
     const mapElement = root.querySelector('[data-delivery-request-map]');
     const latitudeInput = root.querySelector('[data-request-latitude]');
     const longitudeInput = root.querySelector('[data-request-longitude]');
@@ -95,62 +97,74 @@ function initializeRequestMap(root) {
         return;
     }
 
-    const hasInitialLocation = validCoordinate(latitudeInput.value, -90, 90)
-        && validCoordinate(longitudeInput.value, -180, 180);
-    const initialLocation = hasInitialLocation
-        ? [Number(latitudeInput.value), Number(longitudeInput.value)]
-        : DEFAULT_CENTER;
-    const map = L.map(mapElement, {
-        attributionControl: true,
-        keyboard: true,
-        zoomControl: true,
-    }).setView(initialLocation, hasInitialLocation ? 16 : 12);
+    let map = null;
     let marker = null;
+    let AdvancedMarkerElement = null;
 
-    L.tileLayer(OPENSTREETMAP_TILE_URL, {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-        referrerPolicy: 'origin',
-    }).addTo(map);
+    const currentPosition = () => {
+        if (!validCoordinate(latitudeInput.value, -90, 90)
+            || !validCoordinate(longitudeInput.value, -180, 180)) {
+            return null;
+        }
+
+        return {
+            latitude: Number(latitudeInput.value),
+            longitude: Number(longitudeInput.value),
+        };
+    };
+
+    const ensureMarker = (position) => {
+        if (!map || !AdvancedMarkerElement) {
+            return;
+        }
+
+        const googleLocation = googlePosition(position.latitude, position.longitude);
+
+        if (!marker) {
+            marker = new AdvancedMarkerElement({
+                map,
+                position: googleLocation,
+                content: locationMarker(),
+                gmpDraggable: true,
+                title: 'Selected delivery destination',
+            });
+            marker.addListener('dragend', (event) => {
+                const selected = coordinateFromGoogle(event.latLng ?? marker.position);
+
+                if (selected) {
+                    selectLocation(selected.latitude, selected.longitude, false);
+                }
+            });
+        } else {
+            marker.position = googleLocation;
+            marker.map = map;
+        }
+    };
 
     const selectLocation = (latitude, longitude, moveMap = true) => {
         if (!validCoordinate(latitude, -90, 90) || !validCoordinate(longitude, -180, 180)) {
             return;
         }
 
-        const position = [Number(latitude), Number(longitude)];
-        latitudeInput.value = position[0].toFixed(7);
-        longitudeInput.value = position[1].toFixed(7);
+        const position = {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+        };
+        latitudeInput.value = position.latitude.toFixed(7);
+        longitudeInput.value = position.longitude.toFixed(7);
+        ensureMarker(position);
 
-        if (!marker) {
-            marker = L.marker(position, {
-                draggable: true,
-                icon: locationMarker(),
-                keyboard: true,
-                title: 'Selected delivery destination',
-            }).addTo(map);
-            marker.on('dragend', () => {
-                const selected = marker.getLatLng();
-                selectLocation(selected.lat, selected.lng, false);
-            });
-        } else {
-            marker.setLatLng(position);
-        }
-
-        if (moveMap) {
-            map.setView(position, Math.max(map.getZoom(), 16));
+        if (moveMap && map) {
+            map.setCenter(googlePosition(position.latitude, position.longitude));
+            map.setZoom(Math.max(map.getZoom() ?? 0, 16));
         }
 
         if (status) {
-            status.textContent = 'Delivery location selected. Drag the pin or tap the map to adjust it.';
+            status.textContent = map
+                ? 'Delivery location selected. Drag the pin or tap the map to adjust it.'
+                : 'Delivery location selected from your device.';
         }
     };
-
-    map.on('click', (event) => selectLocation(event.latlng.lat, event.latlng.lng, false));
-
-    if (hasInitialLocation) {
-        selectLocation(initialLocation[0], initialLocation[1], false);
-    }
 
     locationButton?.addEventListener('click', () => {
         if (!navigator.geolocation) {
@@ -170,7 +184,9 @@ function initializeRequestMap(root) {
                 locationButton.removeAttribute('aria-busy');
             },
             () => {
-                if (status) status.textContent = 'Current location was unavailable. Allow location access or tap the map.';
+                if (status) status.textContent = map
+                    ? 'Current location was unavailable. Allow location access or tap the map.'
+                    : 'Current location and map are unavailable. Allow location access or try again later.';
                 locationButton.disabled = false;
                 locationButton.removeAttribute('aria-busy');
             },
@@ -182,7 +198,49 @@ function initializeRequestMap(root) {
         );
     });
 
-    window.setTimeout(() => map.invalidateSize(false), 0);
+    const googleMaps = await loadGoogleMaps();
+
+    if (!googleMaps) {
+        const message = document.createElement('p');
+
+        message.className = 'map-surface-unavailable';
+        message.textContent = 'Map temporarily unavailable. Use your current location or try again later.';
+        mapElement.replaceChildren(message);
+        if (status && !currentPosition()) {
+            status.textContent = message.textContent;
+        }
+
+        return;
+    }
+
+    AdvancedMarkerElement = googleMaps.AdvancedMarkerElement;
+    const initialPosition = currentPosition();
+    const center = initialPosition
+        ? googlePosition(initialPosition.latitude, initialPosition.longitude)
+        : DEFAULT_CENTER;
+    map = new googleMaps.Map(mapElement, {
+        center,
+        zoom: initialPosition ? 16 : 12,
+        mapId: googleMaps.mapId,
+        clickableIcons: false,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        zoomControl: true,
+        keyboardShortcuts: true,
+        gestureHandling: 'cooperative',
+    });
+    map.addListener('click', (event) => {
+        const selected = coordinateFromGoogle(event.latLng);
+
+        if (selected) {
+            selectLocation(selected.latitude, selected.longitude, false);
+        }
+    });
+
+    if (initialPosition) {
+        ensureMarker(initialPosition);
+    }
 }
 
 function initializeRequestSubmission(root) {

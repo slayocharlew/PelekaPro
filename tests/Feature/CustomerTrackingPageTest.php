@@ -38,7 +38,6 @@ class CustomerTrackingPageTest extends TestCase
 
         $html = $response->getContent();
         $this->assertStringNotContainsString($token, $html);
-        $this->assertStringNotContainsString((string) $delivery->delivery_pin, $html);
         $this->assertStringNotContainsString($delivery->tracking_code, $html);
         $this->assertStringNotContainsString('delivery_id', $html);
         $this->assertStringNotContainsString('business_id', $html);

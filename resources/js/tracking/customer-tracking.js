@@ -39,11 +39,7 @@ class CustomerTrackingPage {
         this.hiddenAt = null;
         this.ended = false;
         this.elements = this.collectElements();
-        this.map = new CustomerTrackingMap(
-            this.elements.map,
-            this.elements.mapPlaceholder
-        );
-        this.mapReady = this.map.initialize();
+        this.map = new CustomerTrackingMap(this.elements.map);
     }
 
     start() {
@@ -431,7 +427,7 @@ class CustomerTrackingPage {
         }
 
         const location = this.state.location;
-        const mapAvailable = await this.mapReady;
+        const mapAvailable = await this.map.initialize();
 
         if (this.ended || this.state.location !== location) {
             return;

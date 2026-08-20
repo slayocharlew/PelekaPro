@@ -358,7 +358,6 @@ class DeliveryManagementService
         $deliveryData['delivery_number'] = $this->numbers->deliveryNumber();
         $deliveryData['tracking_code'] = $this->numbers->trackingCode();
         $deliveryData['public_tracking_token'] = $this->numbers->publicTrackingToken();
-        $deliveryData['delivery_pin'] = $this->numbers->deliveryPin();
         $deliveryData['payment_method'] = $deliveryData['payment_method'] ?? 'cash_on_delivery';
         $deliveryData['amount_to_collect'] = $deliveryData['amount_to_collect'] ?? 0;
         $deliveryData['delivery_fee'] = $deliveryData['delivery_fee'] ?? 0;

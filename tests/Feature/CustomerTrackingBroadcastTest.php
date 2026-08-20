@@ -248,7 +248,7 @@ class CustomerTrackingBroadcastTest extends TestCase
             $response = match ($terminalStatus) {
                 'delivered' => $this->actingAs($driver)->postJson(
                     "/api/driver/deliveries/{$delivery->id}/deliver",
-                    ['delivery_pin' => '123456', 'collected_amount' => 5000]
+                    ['collected_amount' => 5000]
                 ),
                 'failed' => $this->actingAs($driver)->postJson(
                     "/api/driver/deliveries/{$delivery->id}/fail",
@@ -317,7 +317,7 @@ class CustomerTrackingBroadcastTest extends TestCase
         $this->actingAs($driver)
             ->postJson(
                 "/api/driver/deliveries/{$delivery->id}/deliver",
-                ['delivery_pin' => '123456', 'collected_amount' => 5000]
+                ['collected_amount' => 5000]
             )
             ->assertOk();
 
@@ -343,7 +343,7 @@ class CustomerTrackingBroadcastTest extends TestCase
         $driver = $this->customerTrackingDriver($business);
         $delivery = $this->activeCustomerTrackingDelivery($business, $driver);
         Event::fake([DeliveryTrackingStatusUpdated::class]);
-        $payload = ['delivery_pin' => '123456', 'collected_amount' => 5000];
+        $payload = ['collected_amount' => 5000];
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", $payload)

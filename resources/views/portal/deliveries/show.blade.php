@@ -197,7 +197,7 @@
                 </div>
                 <dl class="portal-summary-list">
                     <div><dt>Method</dt><dd>{{ str($delivery->payment_method)->replace('_', ' ')->title() }}</dd></div>
-                    <div><dt>Expected</dt><dd>TZS {{ number_format((float) ($delivery->payment?->expected_amount ?? $delivery->amount_to_collect), 2) }}</dd></div>
+                    <div><dt>Driver should collect</dt><dd>TZS {{ number_format((float) ($delivery->payment?->expected_amount ?? $delivery->amount_to_collect), 2) }}</dd></div>
                     <div><dt>Collected</dt><dd>TZS {{ number_format((float) ($delivery->payment?->collected_amount ?? 0), 2) }}</dd></div>
                     <div><dt>State</dt><dd>{{ str($delivery->payment?->payment_status ?? 'pending')->replace('_', ' ')->title() }}</dd></div>
                     <div><dt>Delivery fee</dt><dd>TZS {{ number_format((float) $delivery->delivery_fee, 2) }}</dd></div>

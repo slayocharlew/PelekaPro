@@ -95,7 +95,6 @@ trait CreatesCustomerDeliveryRequestFixtures
         return array_replace_recursive([
             'customer_name' => 'Asha Mteja',
             'customer_phone' => '255712345678',
-            'customer_email' => 'asha@example.test',
             'dropoff_address' => 'Mikocheni, Dar es Salaam',
             'dropoff_latitude' => -6.7750000,
             'dropoff_longitude' => 39.2500000,
@@ -126,7 +125,6 @@ trait CreatesCustomerDeliveryRequestFixtures
             'customer_resolution' => 'new',
             'customer_name' => $deliveryRequest->customer_name,
             'customer_phone' => $deliveryRequest->customer_phone,
-            'customer_email' => $deliveryRequest->customer_email,
             'branch_id' => null,
             'pickup_name' => 'Shop dispatch',
             'pickup_phone' => '255700000001',

@@ -20,7 +20,6 @@ class SubmitCustomerDeliveryRequestRequest extends FormRequest
         return [
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_phone' => ['required', 'string', 'max:30'],
-            'customer_email' => ['nullable', 'email', 'max:255'],
             'dropoff_address' => ['required', 'string', 'max:255'],
             'dropoff_latitude' => ['required', 'numeric', 'between:-90,90'],
             'dropoff_longitude' => ['required', 'numeric', 'between:-180,180'],

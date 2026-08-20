@@ -75,6 +75,7 @@ test('public delivery request templates contain no server ownership or payment f
     assert.equal(source.includes('name="business_id"'), false);
     assert.equal(source.includes('name="driver_id"'), false);
     assert.equal(source.includes('name="payment_method"'), false);
+    assert.equal(source.includes('name="customer_email"'), false);
     assert.equal(source.includes('localStorage'), false);
     assert.equal(source.includes('sessionStorage'), false);
 });

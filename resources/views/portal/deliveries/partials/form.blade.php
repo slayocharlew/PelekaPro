@@ -249,8 +249,9 @@
             @error('payment_method') <p class="portal-field__error">{{ $message }}</p> @enderror
         </div>
         <div class="portal-field">
-            <label for="amount_to_collect">Amount to collect (TZS)</label>
+            <label for="amount_to_collect">Amount driver should collect (TZS)</label>
             <input id="amount_to_collect" name="amount_to_collect" type="number" min="0" step="0.01" value="{{ old('amount_to_collect', $editing ? $delivery->amount_to_collect : 0) }}">
+            <p class="portal-field__hint">Enter the total the driver must collect from the customer. The delivery fee is separate and is not added automatically.</p>
             @error('amount_to_collect') <p class="portal-field__error">{{ $message }}</p> @enderror
         </div>
         <div class="portal-field">

@@ -57,11 +57,6 @@
                                 <input id="customer_phone" name="customer_phone" type="tel" maxlength="30" autocomplete="tel" value="{{ old('customer_phone') }}" required>
                                 @error('customer_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
                             </div>
-                            <div class="portal-field delivery-request-grid__wide">
-                                <label for="customer_email">Email (optional)</label>
-                                <input id="customer_email" name="customer_email" type="email" maxlength="255" autocomplete="email" placeholder="Optional" value="{{ old('customer_email') }}">
-                                @error('customer_email') <p class="portal-field__error">{{ $message }}</p> @enderror
-                            </div>
                         </div>
                     </section>
 

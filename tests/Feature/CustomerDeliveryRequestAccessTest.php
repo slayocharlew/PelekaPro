@@ -130,7 +130,7 @@ class CustomerDeliveryRequestAccessTest extends TestCase
             ->assertSee('Safe Form Business')
             ->assertSee('name="customer_name"', false)
             ->assertSee('name="customer_phone"', false)
-            ->assertSee('name="customer_email"', false)
+            ->assertDontSee('name="customer_email"', false)
             ->assertSee('name="items[0][item_name]"', false)
             ->assertSee('data-delivery-request-map', false)
             ->assertSee('name="dropoff_latitude"', false)
@@ -159,7 +159,9 @@ class CustomerDeliveryRequestAccessTest extends TestCase
         $cookieValue = $this->customerDeliveryRequestCookie($issued['token']);
 
         $response = $this->withCredentials()->withCookie($cookieName, $cookieValue)
-            ->post('/delivery-request/session', $this->customerDeliveryRequestSubmission());
+            ->post('/delivery-request/session', $this->customerDeliveryRequestSubmission([
+                'customer_email' => 'ignored@example.test',
+            ]));
 
         $response->assertRedirect(route('customer.delivery-request.submitted'))
             ->assertCookieExpired($cookieName);
@@ -167,6 +169,7 @@ class CustomerDeliveryRequestAccessTest extends TestCase
         $this->assertSame('submitted', $deliveryRequest->status);
         $this->assertNotNull($deliveryRequest->submitted_at);
         $this->assertSame('Asha Mteja', $deliveryRequest->customer_name);
+        $this->assertNull($deliveryRequest->customer_email);
         $this->assertSame('-6.7750000', $deliveryRequest->dropoff_latitude);
         $this->assertDatabaseCount('customer_delivery_request_items', 2);
         $this->assertDatabaseCount('customers', 0);

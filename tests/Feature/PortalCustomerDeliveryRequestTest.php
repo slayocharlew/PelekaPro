@@ -173,6 +173,7 @@ class PortalCustomerDeliveryRequestTest extends TestCase
             'tracking_code' => 'BROWSER-TRACKING',
             'public_tracking_token' => 'browser-public-token',
             'delivery_pin' => '000000',
+            'customer_email' => 'ignored@example.test',
         ]);
 
         $response = $this->actingAs($owner, 'web')
@@ -209,6 +210,7 @@ class PortalCustomerDeliveryRequestTest extends TestCase
             'phone' => '255712345678',
             'status' => 'active',
         ]);
+        $this->assertNull($delivery->customer->email);
         $this->assertDatabaseHas('customer_addresses', [
             'id' => $delivery->customer_address_id,
             'business_id' => $business->id,

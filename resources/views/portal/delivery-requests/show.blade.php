@@ -131,11 +131,6 @@
                         @error('customer_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
                     </div>
                     <div class="portal-field">
-                        <label for="customer_email">Customer email (optional)</label>
-                        <input id="customer_email" name="customer_email" type="email" maxlength="255" value="{{ old('customer_email', $deliveryRequest->customer_email) }}">
-                        @error('customer_email') <p class="portal-field__error">{{ $message }}</p> @enderror
-                    </div>
-                    <div class="portal-field">
                         <label for="branch_id">Branch</label>
                         <select id="branch_id" name="branch_id" data-branch-pickup-select>
                             <option value="">No branch</option>
@@ -218,7 +213,7 @@
                 <div class="portal-card__header"><div><h2>Business-controlled payment</h2></div></div>
                 <div class="portal-form-grid">
                     <div class="portal-field"><label for="payment_method">Payment method</label><select id="payment_method" name="payment_method" required>@foreach ($paymentMethods as $method)<option value="{{ $method }}" @selected(old('payment_method', 'cash_on_delivery') === $method)>{{ str($method)->replace('_', ' ')->title() }}</option>@endforeach</select>@error('payment_method') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                    <div class="portal-field"><label for="amount_to_collect">Amount to collect (TZS)</label><input id="amount_to_collect" name="amount_to_collect" type="number" min="0" step="0.01" value="{{ old('amount_to_collect', 0) }}" required>@error('amount_to_collect') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
+                    <div class="portal-field"><label for="amount_to_collect">Amount driver should collect (TZS)</label><input id="amount_to_collect" name="amount_to_collect" type="number" min="0" step="0.01" value="{{ old('amount_to_collect', 0) }}" required><p class="portal-field__hint">Enter the total the driver must collect from the customer. The delivery fee is separate and is not added automatically.</p>@error('amount_to_collect') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
                     <div class="portal-field"><label for="delivery_fee">Delivery fee (TZS)</label><input id="delivery_fee" name="delivery_fee" type="number" min="0" step="0.01" value="{{ old('delivery_fee', 0) }}" required>@error('delivery_fee') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
                     <div class="portal-field portal-field--wide"><label for="special_instruction">Special instruction</label><textarea id="special_instruction" name="special_instruction" rows="3">{{ old('special_instruction', $deliveryRequest->special_instruction) }}</textarea>@error('special_instruction') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
                 </div>

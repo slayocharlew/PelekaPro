@@ -137,7 +137,6 @@ final class CustomerDeliveryRequestService
             $locked->forceFill(Arr::only($payload, [
                 'customer_name',
                 'customer_phone',
-                'customer_email',
                 'dropoff_address',
                 'dropoff_latitude',
                 'dropoff_longitude',
@@ -190,7 +189,6 @@ final class CustomerDeliveryRequestService
                     'business_id' => $locked->business_id,
                     'name' => $payload['customer_name'],
                     'phone' => $payload['customer_phone'],
-                    'email' => $payload['customer_email'] ?? null,
                     'status' => 'active',
                 ]);
 

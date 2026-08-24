@@ -51,6 +51,19 @@ Flutter must never connect directly to MySQL or Redis. Its Firebase access is
 limited to the opaque paths and claims returned by Laravel; it must never submit
 server-controlled ownership fields.
 
+### Driver account provisioning
+
+Driver self-registration is not supported. A business owner or business admin
+registers the driver from the web portal at `/portal/drivers/create`. Laravel
+creates the `users` account and its same-business `driver_profiles` record in
+one database transaction. The business, `driver` role, active account state,
+availability, and initial `available` work status are server-controlled.
+
+The owner gives the driver the registered phone number (or optional email) and
+initial password through a trusted method. PelekaPro Mobile then uses those
+credentials only with `POST /api/auth/login`; the password is never returned by
+Laravel and should never be stored by Flutter.
+
 ### Business branch pickup location
 
 Pickup location is configured by the business, not by the driver. An authorized

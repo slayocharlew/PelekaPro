@@ -43,6 +43,14 @@
                         >
                             Requests
                         </a>
+                        @if (auth('web')->user()->isBusinessOwner() || auth('web')->user()->isBusinessAdmin())
+                            <a
+                                href="{{ route('portal.drivers.index') }}"
+                                @class(['portal-nav__link', 'is-active' => request()->routeIs('portal.drivers.*')])
+                            >
+                                Drivers
+                            </a>
+                        @endif
                         @if (auth('web')->user()->isSuperAdmin())
                             <a
                                 href="{{ route('portal.businesses.index') }}"

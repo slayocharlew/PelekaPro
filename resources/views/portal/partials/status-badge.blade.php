@@ -1,8 +1,8 @@
 @php
     $statusTone = match ($status) {
-        'delivered', 'converted' => 'success',
-        'failed', 'cancelled', 'revoked', 'expired' => 'danger',
-        'on_the_way', 'arrived' => 'live',
+        'delivered', 'converted', 'available', 'active' => 'success',
+        'failed', 'cancelled', 'revoked', 'expired', 'suspended', 'inactive' => 'danger',
+        'on_the_way', 'arrived', 'on_delivery' => 'live',
         'assigned', 'accepted', 'submitted' => 'info',
         default => 'neutral',
     };

@@ -6,6 +6,7 @@ use App\Http\Controllers\Portal\BusinessController as PortalBusinessController;
 use App\Http\Controllers\Portal\BusinessSettingsController as PortalBusinessSettingsController;
 use App\Http\Controllers\Portal\CustomerDeliveryRequestController as PortalCustomerDeliveryRequestController;
 use App\Http\Controllers\Portal\DeliveryController as PortalDeliveryController;
+use App\Http\Controllers\Portal\DriverController as PortalDriverController;
 use App\Http\Controllers\PortalAuthController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,10 @@ Route::middleware(['auth:web', 'active.web.user', 'role:super_admin,business_own
         Route::post('/deliveries/{delivery}/assign-driver', [PortalDeliveryController::class, 'assign'])->name('deliveries.assign');
         Route::delete('/deliveries/{delivery}/assigned-driver', [PortalDeliveryController::class, 'unassign'])->name('deliveries.unassign');
         Route::post('/deliveries/{delivery}/cancel', [PortalDeliveryController::class, 'cancel'])->name('deliveries.cancel');
+
+        Route::get('/drivers', [PortalDriverController::class, 'index'])->name('drivers.index');
+        Route::get('/drivers/create', [PortalDriverController::class, 'create'])->name('drivers.create');
+        Route::post('/drivers', [PortalDriverController::class, 'store'])->name('drivers.store');
 
         Route::get('/delivery-requests', [PortalCustomerDeliveryRequestController::class, 'index'])->name('delivery-requests.index');
         Route::get('/delivery-requests/create', [PortalCustomerDeliveryRequestController::class, 'create'])->name('delivery-requests.create');

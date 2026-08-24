@@ -35,6 +35,10 @@ function snapshot(overrides = {}) {
             event: 'delivery.location.updated',
             status_event: 'delivery.tracking.status.updated',
         },
+        transport: {
+            name: 'reverb',
+            credentials_url: null,
+        },
     };
 
     return {
@@ -47,6 +51,10 @@ function snapshot(overrides = {}) {
         channel: {
             ...payload.channel,
             ...(overrides.channel ?? {}),
+        },
+        transport: {
+            ...payload.transport,
+            ...(overrides.transport ?? {}),
         },
     };
 }
@@ -77,10 +85,30 @@ test('valid active snapshot exposes only normalized customer state', () => {
         'channelName',
         'locationEvent',
         'statusEvent',
+        'transportName',
+        'firebaseCredentialsUrl',
     ]);
     assert.equal(result.status, 'on_the_way');
     assert.equal(result.location.latitude, -6.7924);
     assert.equal(result.channelName, `delivery-tracking.${alias}`);
+});
+
+test('Firebase snapshots accept only the fixed same-origin credential endpoint', () => {
+    const valid = validateSnapshot(snapshot({
+        transport: {
+            name: 'firebase',
+            credentials_url: '/tracking/firebase-credentials',
+        },
+    }));
+
+    assert.equal(valid.transportName, 'firebase');
+    assert.equal(valid.firebaseCredentialsUrl, '/tracking/firebase-credentials');
+    assert.equal(validateSnapshot(snapshot({
+        transport: {
+            name: 'firebase',
+            credentials_url: 'https://example.test/token',
+        },
+    })), null);
 });
 
 test('active snapshot without Redis location remains valid and marker-free', () => {

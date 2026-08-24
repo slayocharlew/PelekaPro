@@ -272,6 +272,15 @@
     padding: 1rem;
 }
 
+.portal-delivery-browser {
+    transition: opacity 150ms ease;
+}
+
+.portal-delivery-browser[aria-busy='true'] {
+    opacity: 0.58;
+    pointer-events: none;
+}
+
 .portal-filter-card__actions,
 .portal-form-actions,
 .portal-dialog__actions {

@@ -32,6 +32,7 @@ class PortalCustomerDeliveryRequestTest extends TestCase
             $this->actingAs($user, 'web')
                 ->get(route('portal.delivery-requests.index'))
                 ->assertOk()
+                ->assertViewHas('deliveryRequests', fn ($deliveryRequests): bool => $deliveryRequests->perPage() === 10)
                 ->assertSee('Request #'.$visible->id)
                 ->assertDontSee('Request #'.$hidden->id);
 

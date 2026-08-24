@@ -61,7 +61,7 @@ class CustomerDeliveryRequestController extends Controller
         }
 
         return view('portal.delivery-requests.index', [
-            'deliveryRequests' => $query->latest()->paginate(15)->withQueryString(),
+            'deliveryRequests' => $query->latest()->paginate(10)->withQueryString(),
             'businesses' => $user->isSuperAdmin() ? $this->activeBusinesses() : collect(),
             'filters' => $filters,
             'statuses' => [...CustomerDeliveryRequest::STATUSES, 'expired'],

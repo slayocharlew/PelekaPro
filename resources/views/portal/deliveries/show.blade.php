@@ -27,24 +27,20 @@
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <h2>Recipient and location</h2>
+                        <h2>Customer and route</h2>
                     </div>
                 </div>
                 <dl class="portal-detail-list">
                     <div>
-                        <dt>Customer</dt>
-                        <dd>{{ $delivery->customer?->name ?? 'Not available' }}</dd>
+                        <dt>Recipient</dt>
+                        <dd>{{ $delivery->dropoff_name ?: ($delivery->customer?->name ?? 'Not available') }}</dd>
                     </div>
                     <div>
-                        <dt>Customer phone</dt>
-                        <dd>{{ $delivery->customer?->phone ?? 'Not available' }}</dd>
-                    </div>
-                    <div>
-                        <dt>Drop-off contact</dt>
-                        <dd>{{ $delivery->dropoff_name ?: 'Not provided' }} @if ($delivery->dropoff_phone) · {{ $delivery->dropoff_phone }} @endif</dd>
+                        <dt>Phone</dt>
+                        <dd>{{ $delivery->dropoff_phone ?: ($delivery->customer?->phone ?? 'Not available') }}</dd>
                     </div>
                     <div class="portal-detail-list__wide">
-                        <dt>Drop-off address</dt>
+                        <dt>Delivery address</dt>
                         <dd>
                             {{ $delivery->dropoff_address ?: collect([
                                 $delivery->customerAddress?->street,
@@ -54,31 +50,16 @@
                             ])->filter()->implode(', ') ?: 'Not provided' }}
                         </dd>
                     </div>
-                    <div>
-                        <dt>Drop-off coordinates</dt>
-                        <dd>
-                            @if ($delivery->dropoff_latitude !== null && $delivery->dropoff_longitude !== null)
-                                {{ $delivery->dropoff_latitude }}, {{ $delivery->dropoff_longitude }}
-                            @else
-                                Not confirmed
-                            @endif
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>Branch</dt>
-                        <dd>{{ $delivery->branch?->name ?? 'No branch selected' }}</dd>
-                    </div>
-                    <div>
-                        <dt>Pickup contact</dt>
-                        <dd>{{ $delivery->pickup_name ?: 'Not provided' }} @if ($delivery->pickup_phone) · {{ $delivery->pickup_phone }} @endif</dd>
-                    </div>
                     <div class="portal-detail-list__wide">
-                        <dt>Pickup address</dt>
-                        <dd>{{ $delivery->pickup_address ?: 'Not provided' }}</dd>
+                        <dt>Pickup</dt>
+                        <dd>
+                            {{ $delivery->branch?->name ?? ($delivery->pickup_name ?: 'Not provided') }}
+                            @if ($delivery->pickup_address) · {{ $delivery->pickup_address }} @endif
+                        </dd>
                     </div>
                     @if ($delivery->special_instruction)
                         <div class="portal-detail-list__wide">
-                            <dt>Special instruction</dt>
+                            <dt>Instructions</dt>
                             <dd>{{ $delivery->special_instruction }}</dd>
                         </div>
                     @endif
@@ -138,7 +119,7 @@
             <section id="driver-assignment" class="portal-card portal-sticky-card">
                 <div class="portal-card__header">
                     <div>
-                        <h2>Assignment</h2>
+                        <h2>Driver</h2>
                     </div>
                 </div>
 
@@ -185,21 +166,21 @@
                         </form>
                     @endif
                 @elseif ($delivery->started_at)
-                    <p class="portal-callout">Assignment is locked because this delivery has started.</p>
+                    <p class="portal-callout">The driver cannot be changed after the delivery starts.</p>
                 @endif
             </section>
 
             <section class="portal-card">
                 <div class="portal-card__header">
                     <div>
-                        <h2>Payment summary</h2>
+                        <h2>Payment</h2>
                     </div>
                 </div>
                 <dl class="portal-summary-list">
                     <div><dt>Method</dt><dd>{{ str($delivery->payment_method)->replace('_', ' ')->title() }}</dd></div>
-                    <div><dt>Driver should collect</dt><dd>TZS {{ number_format((float) ($delivery->payment?->expected_amount ?? $delivery->amount_to_collect), 2) }}</dd></div>
+                    <div><dt>Amount to collect</dt><dd>TZS {{ number_format((float) ($delivery->payment?->expected_amount ?? $delivery->amount_to_collect), 2) }}</dd></div>
                     <div><dt>Collected</dt><dd>TZS {{ number_format((float) ($delivery->payment?->collected_amount ?? 0), 2) }}</dd></div>
-                    <div><dt>State</dt><dd>{{ str($delivery->payment?->payment_status ?? 'pending')->replace('_', ' ')->title() }}</dd></div>
+                    <div><dt>Payment status</dt><dd>{{ str($delivery->payment?->payment_status ?? 'pending')->replace('_', ' ')->title() }}</dd></div>
                     <div><dt>Delivery fee</dt><dd>TZS {{ number_format((float) $delivery->delivery_fee, 2) }}</dd></div>
                 </dl>
             </section>
@@ -207,10 +188,10 @@
             <section class="portal-card portal-tracking-link">
                 <div class="portal-card__header">
                     <div>
-                        <h2>Secure tracking link</h2>
+                        <h2>Customer tracking</h2>
                     </div>
                 </div>
-                <p>Share this private link only with the customer for this delivery.</p>
+                <p>Copy or share this delivery's tracking link with the customer.</p>
                 <div class="portal-copy-field">
                     <input id="tracking-link" type="text" value="{{ $trackingUrl }}" readonly aria-label="Customer tracking link">
                     <button class="portal-button portal-button--secondary portal-button--small" type="button" data-copy-target="tracking-link">Copy</button>
@@ -226,21 +207,6 @@
                 <p class="portal-copy-status" data-copy-status role="status" aria-live="polite"></p>
             </section>
 
-            <section class="portal-card">
-                <div class="portal-card__header">
-                    <div>
-                        <h2>Timestamps</h2>
-                    </div>
-                </div>
-                <dl class="portal-summary-list">
-                    <div><dt>Created</dt><dd>{{ $delivery->created_at?->format('d M Y, H:i') }}</dd></div>
-                    <div><dt>Updated</dt><dd>{{ $delivery->updated_at?->format('d M Y, H:i') }}</dd></div>
-                    @if ($delivery->started_at)<div><dt>Started</dt><dd>{{ $delivery->started_at->format('d M Y, H:i') }}</dd></div>@endif
-                    @if ($delivery->delivered_at)<div><dt>Delivered</dt><dd>{{ $delivery->delivered_at->format('d M Y, H:i') }}</dd></div>@endif
-                    @if ($delivery->failed_at)<div><dt>Failed</dt><dd>{{ $delivery->failed_at->format('d M Y, H:i') }}</dd></div>@endif
-                    @if ($delivery->cancelled_at)<div><dt>Cancelled</dt><dd>{{ $delivery->cancelled_at->format('d M Y, H:i') }}</dd></div>@endif
-                </dl>
-            </section>
         </aside>
     </div>
 
@@ -250,10 +216,10 @@
                 @csrf
                 <div class="portal-dialog__heading">
                     <h2>Cancel this delivery?</h2>
-                    <p>Cancellation closes any active tracking session and removes the temporary live-location state.</p>
+                    <p>The delivery will stop and the driver will no longer be able to continue it.</p>
                 </div>
                 <div class="portal-field">
-                    <label for="note">Internal status note (optional)</label>
+                    <label for="note">Reason (optional)</label>
                     <textarea id="note" name="note" rows="3" maxlength="1000"></textarea>
                     @error('note') <p class="portal-field__error">{{ $message }}</p> @enderror
                 </div>

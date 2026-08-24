@@ -1,0 +1,109 @@
+{
+    "rules": {
+        ".read": false,
+        ".write": false,
+        "delivery_tracking": {
+            "$deliveryAlias": {
+                "control": {
+                    ".read": false,
+                    ".write": false
+                },
+                "live": {
+                    ".read": "auth != null && auth.token.delivery_alias === $deliveryAlias && auth.token.access_expires_at_ms >= now && ((auth.token.tracking_role === 'driver' && root.child('delivery_tracking').child($deliveryAlias).child('control').child('active').val() === true && root.child('delivery_tracking').child($deliveryAlias).child('control').child('session_alias').val() === auth.token.session_alias && root.child('delivery_tracking').child($deliveryAlias).child('control').child('credential_version').val() === auth.token.credential_version) || (auth.token.tracking_role === 'customer' && root.child('delivery_tracking').child($deliveryAlias).child('control').child('customer_token_fingerprint').val() === auth.token.token_fingerprint))",
+                    ".write": "auth != null && auth.token.tracking_role === 'driver' && auth.token.delivery_alias === $deliveryAlias && root.child('delivery_tracking').child($deliveryAlias).child('control').child('active').val() === true && root.child('delivery_tracking').child($deliveryAlias).child('control').child('session_alias').val() === auth.token.session_alias && root.child('delivery_tracking').child($deliveryAlias).child('control').child('driver_uid').val() === auth.uid && root.child('delivery_tracking').child($deliveryAlias).child('control').child('credential_version').val() === auth.token.credential_version && root.child('delivery_tracking').child($deliveryAlias).child('control').child('access_expires_at_ms').val() >= now && newData.child('recorded_at_ms').val() >= root.child('delivery_tracking').child($deliveryAlias).child('control').child('started_at_ms').val() - 120000 && newData.exists() && (!data.exists() || newData.child('recorded_at_ms').val() > data.child('recorded_at_ms').val() || (newData.child('recorded_at_ms').val() === data.child('recorded_at_ms').val() && newData.child('sequence').val() > data.child('sequence').val())) && root.child('delivery_tracking').child($deliveryAlias).child('history').child(auth.token.session_alias).child(newData.child('sample_id').val()).exists()",
+                    ".validate": "newData.hasChildren(['sample_id', 'sequence', 'latitude', 'longitude', 'recorded_at', 'recorded_at_ms', 'received_at_ms'])",
+                    "sample_id": {
+                        ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{16,80}$/)"
+                    },
+                    "sequence": {
+                        ".validate": "newData.isNumber() && newData.val() >= 0"
+                    },
+                    "latitude": {
+                        ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+                    },
+                    "longitude": {
+                        ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+                    },
+                    "accuracy": {
+                        ".validate": "newData.isNumber() && newData.val() >= 0"
+                    },
+                    "speed": {
+                        ".validate": "newData.isNumber() && newData.val() >= 0"
+                    },
+                    "heading": {
+                        ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360"
+                    },
+                    "battery_level": {
+                        ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+                    },
+                    "recorded_at": {
+                        ".validate": "newData.isString() && newData.val().length <= 40"
+                    },
+                    "recorded_at_ms": {
+                        ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 120000"
+                    },
+                    "received_at_ms": {
+                        ".validate": "newData.isNumber() && newData.val() >= now - 10000 && newData.val() <= now + 10000"
+                    },
+                    "$other": {
+                        ".validate": false
+                    }
+                },
+                "history": {
+                    ".read": false,
+                    "$sessionAlias": {
+                        ".indexOn": ["received_at_ms"],
+                        "$sampleId": {
+                            ".write": "auth != null && auth.token.tracking_role === 'driver' && auth.token.delivery_alias === $deliveryAlias && auth.token.session_alias === $sessionAlias && root.child('delivery_tracking').child($deliveryAlias).child('control').child('active').val() === true && root.child('delivery_tracking').child($deliveryAlias).child('control').child('session_alias').val() === $sessionAlias && root.child('delivery_tracking').child($deliveryAlias).child('control').child('driver_uid').val() === auth.uid && root.child('delivery_tracking').child($deliveryAlias).child('control').child('credential_version').val() === auth.token.credential_version && root.child('delivery_tracking').child($deliveryAlias).child('control').child('access_expires_at_ms').val() >= now && newData.child('recorded_at_ms').val() >= root.child('delivery_tracking').child($deliveryAlias).child('control').child('started_at_ms').val() - 120000 && !data.exists() && newData.exists() && newData.child('sample_id').val() === $sampleId",
+                            ".validate": "newData.hasChildren(['sample_id', 'sequence', 'latitude', 'longitude', 'recorded_at', 'recorded_at_ms', 'received_at_ms'])",
+                            "sample_id": {
+                                ".validate": "newData.isString() && newData.val() === $sampleId && newData.val().matches(/^[A-Za-z0-9_-]{16,80}$/)"
+                            },
+                            "sequence": {
+                                ".validate": "newData.isNumber() && newData.val() >= 0"
+                            },
+                            "latitude": {
+                                ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+                            },
+                            "longitude": {
+                                ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+                            },
+                            "accuracy": {
+                                ".validate": "newData.isNumber() && newData.val() >= 0"
+                            },
+                            "speed": {
+                                ".validate": "newData.isNumber() && newData.val() >= 0"
+                            },
+                            "heading": {
+                                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360"
+                            },
+                            "battery_level": {
+                                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+                            },
+                            "recorded_at": {
+                                ".validate": "newData.isString() && newData.val().length <= 40"
+                            },
+                            "recorded_at_ms": {
+                                ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 120000"
+                            },
+                            "received_at_ms": {
+                                ".validate": "newData.isNumber() && newData.val() >= now - 10000 && newData.val() <= now + 10000"
+                            },
+                            "$other": {
+                                ".validate": false
+                            }
+                        }
+                    }
+                },
+                "public_status": {
+                    ".read": "auth != null && auth.token.delivery_alias === $deliveryAlias && auth.token.access_expires_at_ms >= now && ((auth.token.tracking_role === 'driver' && root.child('delivery_tracking').child($deliveryAlias).child('control').child('session_alias').val() === auth.token.session_alias && root.child('delivery_tracking').child($deliveryAlias).child('control').child('credential_version').val() === auth.token.credential_version) || (auth.token.tracking_role === 'customer' && root.child('delivery_tracking').child($deliveryAlias).child('control').child('customer_token_fingerprint').val() === auth.token.token_fingerprint))",
+                    ".write": false
+                },
+                "$other": {
+                    ".read": false,
+                    ".write": false
+                }
+            }
+        }
+    }
+}

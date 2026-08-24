@@ -32,7 +32,7 @@ class DriverDeliveryWorkflowController extends Controller
     public function start(StartDeliveryRequest $request, Delivery $delivery, DeliveryWorkflowService $workflowService): JsonResponse
     {
         try {
-            $delivery = $workflowService->start($delivery, $request->user());
+            $delivery = $workflowService->start($delivery, $request->user(), $request->validated());
         } catch (DeliveryWorkflowException $exception) {
             return $this->error($exception->getMessage(), $exception->statusCode());
         }

@@ -293,6 +293,155 @@ function initializeCustomerResolution(root) {
     refresh();
 }
 
+let deliveryBrowserRequest;
+
+function deliveryFilterUrl(form) {
+    const url = new URL(form.action, window.location.origin);
+
+    for (const [key, value] of new FormData(form).entries()) {
+        if (typeof value === 'string' && value.trim() !== '') {
+            url.searchParams.set(key, value.trim());
+        }
+    }
+
+    return url;
+}
+
+async function loadDeliveryBrowser(root, requestedUrl, updateHistory = true) {
+    const currentBrowser = root.querySelector('[data-delivery-browser]');
+
+    if (!currentBrowser) {
+        window.location.assign(requestedUrl);
+
+        return;
+    }
+
+    deliveryBrowserRequest?.abort();
+    deliveryBrowserRequest = new AbortController();
+    currentBrowser.setAttribute('aria-busy', 'true');
+
+    const activeField = currentBrowser.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+    const activeFieldName = activeField?.getAttribute('name');
+    const selectionStart = activeField instanceof HTMLInputElement
+        ? activeField.selectionStart
+        : null;
+    const selectionEnd = activeField instanceof HTMLInputElement
+        ? activeField.selectionEnd
+        : null;
+
+    const currentStatus = currentBrowser.querySelector('[data-delivery-filter-status]');
+    if (currentStatus) {
+        currentStatus.textContent = 'Updating deliveries.';
+    }
+
+    try {
+        const response = await fetch(requestedUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/html',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            signal: deliveryBrowserRequest.signal,
+        });
+
+        if (!response.ok) {
+            throw new Error('Delivery filters could not be loaded.');
+        }
+
+        const documentFragment = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const nextBrowser = documentFragment.querySelector('[data-delivery-browser]');
+
+        if (!nextBrowser) {
+            throw new Error('Delivery filter response was invalid.');
+        }
+
+        currentBrowser.replaceWith(nextBrowser);
+        initializeSubmittingForms(nextBrowser);
+        initializeDeliveryFilters(root);
+
+        const nextForm = nextBrowser.querySelector('[data-delivery-filter-form]');
+        const nextActiveField = activeFieldName
+            ? nextForm?.elements.namedItem(activeFieldName)
+            : null;
+        if (nextActiveField instanceof HTMLElement) {
+            nextActiveField.focus({ preventScroll: true });
+            if (nextActiveField instanceof HTMLInputElement
+                && selectionStart !== null
+                && selectionEnd !== null
+            ) {
+                nextActiveField.setSelectionRange(selectionStart, selectionEnd);
+            }
+        }
+
+        const nextStatus = nextBrowser.querySelector('[data-delivery-filter-status]');
+        if (nextStatus) {
+            nextStatus.textContent = 'Delivery list updated.';
+        }
+
+        if (updateHistory) {
+            window.history.pushState({}, '', requestedUrl);
+        }
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            return;
+        }
+
+        window.location.assign(requestedUrl);
+    }
+}
+
+function initializeDeliveryFilters(root) {
+    const browser = root.querySelector('[data-delivery-browser]');
+    const form = browser?.querySelector('[data-delivery-filter-form]');
+
+    if (!browser || !form || browser.dataset.deliveryFiltersReady === 'true') {
+        return;
+    }
+
+    browser.dataset.deliveryFiltersReady = 'true';
+    let searchTimer;
+
+    const applyForm = () => {
+        window.clearTimeout(searchTimer);
+        loadDeliveryBrowser(root, deliveryFilterUrl(form));
+    };
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        applyForm();
+    });
+
+    form.querySelectorAll('select').forEach((select) => {
+        select.addEventListener('change', applyForm);
+    });
+
+    form.querySelector('input[type="search"]')?.addEventListener('input', () => {
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(applyForm, 350);
+    });
+
+    browser.addEventListener('click', (event) => {
+        const link = event.target.closest('[data-delivery-ajax-link], .portal-pagination a');
+
+        if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+
+        event.preventDefault();
+        loadDeliveryBrowser(root, link.href);
+    });
+
+    if (root.dataset.deliveryPopstateReady !== 'true') {
+        root.dataset.deliveryPopstateReady = 'true';
+        window.addEventListener('popstate', () => {
+            loadDeliveryBrowser(root, window.location.href, false);
+        });
+    }
+}
+
 export function initializePortal() {
     const root = document.querySelector('[data-portal]');
 
@@ -308,4 +457,5 @@ export function initializePortal() {
     initializeTrackingLink(root);
     initializeDialogs(root);
     initializeCustomerResolution(root);
+    initializeDeliveryFilters(root);
 }

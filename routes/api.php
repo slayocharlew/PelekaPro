@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\DeliveryDriverController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\DriverDeliveryWorkflowController;
 use App\Http\Controllers\Api\DriverLocationController;
+use App\Http\Controllers\Api\FirebaseTrackingCredentialController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('auth/login', [AuthController::class, 'login'])
@@ -43,6 +44,10 @@ Route::middleware(['auth:sanctum', 'active.api.user'])->group(function (): void 
     Route::post('driver/deliveries/{delivery}/locations', [DriverLocationController::class, 'store'])
         ->middleware('throttle:driver-locations')
         ->name('driver.deliveries.locations.store');
+
+    Route::post('driver/deliveries/{delivery}/tracking-credentials', FirebaseTrackingCredentialController::class)
+        ->middleware('throttle:firebase-tracking-credentials')
+        ->name('driver.deliveries.tracking-credentials');
 
     Route::get('deliveries/{delivery}/tracking-locations', [DriverLocationController::class, 'history'])
         ->name('deliveries.tracking-locations.index');

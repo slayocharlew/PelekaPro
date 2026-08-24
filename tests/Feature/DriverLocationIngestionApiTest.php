@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\FirebaseTrackingStore;
 use App\Events\DeliveryLiveLocationUpdated;
 use App\Models\Business;
 use App\Models\Customer;
@@ -10,16 +11,252 @@ use App\Models\DeliveryPayment;
 use App\Models\DeliveryTrackingLocation;
 use App\Models\DeliveryTrackingSession;
 use App\Models\DriverProfile;
+use App\Models\FirebaseTrackingOutbox;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\FirebaseTrackingAliasService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use Kreait\Firebase\Contract\Auth;
+use Lcobucci\JWT\UnencryptedToken;
+use Mockery;
+use Tests\Fakes\InMemoryFirebaseTrackingStore;
 use Tests\TestCase;
 
 class DriverLocationIngestionApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_firebase_mode_keeps_only_start_and_end_points_in_mysql(): void
+    {
+        $firebase = $this->enableFirebaseTracking();
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->deliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/start", $this->locationPayload())
+            ->assertOk();
+
+        $sessionId = $delivery->trackingSessions()->value('id');
+        $this->assertDatabaseHas('delivery_tracking_locations', [
+            'delivery_id' => $delivery->id,
+            'tracking_session_id' => $sessionId,
+            'driver_id' => $driver->id,
+            'point_type' => 'start',
+        ]);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload([
+                'latitude' => -6.793,
+                'recorded_at' => now()->toISOString(),
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('latest_location_updated', true);
+
+        $this->assertSame(1, DeliveryTrackingLocation::query()
+            ->where('delivery_id', $delivery->id)
+            ->count());
+        $this->assertCount(2, $firebase->history[$delivery->id]);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'collected_amount' => 5000,
+                'delivered_latitude' => -6.81,
+                'delivered_longitude' => 39.22,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('delivery_tracking_locations', [
+            'delivery_id' => $delivery->id,
+            'tracking_session_id' => $sessionId,
+            'driver_id' => $driver->id,
+            'point_type' => 'end',
+            'latitude' => '-6.8100000',
+            'longitude' => '39.2200000',
+        ]);
+        $this->assertSame(2, DeliveryTrackingLocation::query()
+            ->where('delivery_id', $delivery->id)
+            ->count());
+        $this->assertArrayNotHasKey($delivery->id, $firebase->live);
+        $this->assertSame('delivered', $firebase->terminalStatuses[$delivery->id]);
+    }
+
+    public function test_firebase_mode_requires_a_current_start_location(): void
+    {
+        $this->enableFirebaseTracking();
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->deliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/start")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['latitude', 'longitude', 'recorded_at']);
+
+        $this->assertSame('assigned', $delivery->refresh()->status);
+        $this->assertDatabaseMissing('delivery_tracking_sessions', [
+            'delivery_id' => $delivery->id,
+        ]);
+    }
+
+    public function test_firebase_mode_does_not_commit_terminal_state_when_write_revocation_fails(): void
+    {
+        $firebase = $this->enableFirebaseTracking();
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->deliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/start", $this->locationPayload())
+            ->assertOk();
+
+        $firebase->failRevoke = true;
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'collected_amount' => 5000,
+            ])
+            ->assertStatus(409);
+
+        $delivery->refresh();
+        $this->assertSame('on_the_way', $delivery->status);
+        $this->assertNull($delivery->delivered_at);
+        $this->assertDatabaseHas('delivery_tracking_sessions', [
+            'delivery_id' => $delivery->id,
+            'driver_id' => $driver->id,
+            'status' => 'active',
+            'stopped_at' => null,
+        ]);
+        $this->assertDatabaseMissing('delivery_tracking_locations', [
+            'delivery_id' => $delivery->id,
+            'point_type' => 'end',
+        ]);
+    }
+
+    public function test_assigned_driver_can_receive_only_scoped_short_lived_firebase_credentials(): void
+    {
+        $firebase = $this->enableFirebaseTracking();
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $otherDriver = $this->driver($business);
+        $delivery = $this->activeDeliveryFor($business, $driver);
+        $session = $delivery->trackingSessions()->where('status', 'active')->firstOrFail();
+        $this->markFirebaseSession($delivery, $session, $driver);
+        $firebase->activate($delivery, $session, $driver);
+        $deliveryAlias = app(FirebaseTrackingAliasService::class)->delivery($delivery);
+        $token = Mockery::mock(UnencryptedToken::class);
+        $token->shouldReceive('toString')->once()->andReturn('firebase-custom-token');
+        $auth = Mockery::mock(Auth::class);
+        $auth->shouldReceive('createCustomToken')
+            ->once()
+            ->withArgs(fn (string $uid, array $claims, int $ttl): bool => str_starts_with($uid, 'driver_')
+                && $claims['tracking_role'] === 'driver'
+                && $claims['delivery_alias'] === $deliveryAlias
+                && $claims['session_alias'] === str_repeat('s', 64)
+                && $ttl === 1800)
+            ->andReturn($token);
+        $this->app->instance(Auth::class, $auth);
+        config()->set('pelekapro.live_tracking.driver', 'redis');
+        $firebase->isEnabled = false;
+
+        $response = $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/tracking-credentials")
+            ->assertOk()
+            ->assertJsonPath('data.token', 'firebase-custom-token')
+            ->assertJsonPath('data.delivery_alias', $deliveryAlias)
+            ->assertJsonPath('data.session_alias', str_repeat('s', 64))
+            ->assertJsonPath('data.database_path', 'delivery_tracking/'.$deliveryAlias);
+
+        $encoded = json_encode($response->json());
+        $this->assertStringNotContainsString('business_id', $encoded);
+        $this->assertStringNotContainsString('driver_id', $encoded);
+        $this->assertStringNotContainsString('tracking_session_id', $encoded);
+        $this->assertStringNotContainsString('credential_version', $encoded);
+
+        $this->actingAs($otherDriver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/tracking-credentials")
+            ->assertForbidden();
+    }
+
+    public function test_active_firebase_session_keeps_safe_terminal_cleanup_after_global_rollback(): void
+    {
+        $firebase = $this->enableFirebaseTracking();
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->deliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/start", $this->locationPayload())
+            ->assertOk();
+
+        config()->set('pelekapro.live_tracking.driver', 'redis');
+        $firebase->isEnabled = false;
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/locations", $this->locationPayload([
+                'latitude' => -6.8,
+                'recorded_at' => now()->toISOString(),
+            ]))
+            ->assertCreated();
+
+        $this->assertSame(1, DeliveryTrackingLocation::query()
+            ->where('delivery_id', $delivery->id)
+            ->count());
+        $this->assertCount(2, $firebase->history[$delivery->id]);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'collected_amount' => 5000,
+            ])
+            ->assertOk();
+
+        $this->assertSame('delivered', $delivery->refresh()->status);
+        $this->assertArrayNotHasKey($delivery->id, $firebase->live);
+        $this->assertSame('delivered', $firebase->terminalStatuses[$delivery->id]);
+        $this->assertDatabaseHas('firebase_tracking_outbox', [
+            'delivery_id' => $delivery->id,
+            'event_type' => 'terminal',
+        ]);
+    }
+
+    public function test_terminal_firebase_publish_failure_keeps_completion_and_retries_from_outbox(): void
+    {
+        $firebase = $this->enableFirebaseTracking();
+        $business = $this->business();
+        $driver = $this->driver($business);
+        $delivery = $this->deliveryFor($business, $driver);
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/start", $this->locationPayload())
+            ->assertOk();
+
+        $firebase->failPublish = true;
+
+        $this->actingAs($driver)
+            ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
+                'collected_amount' => 5000,
+            ])
+            ->assertOk();
+
+        $this->assertSame('delivered', $delivery->refresh()->status);
+        $this->assertArrayNotHasKey($delivery->id, $firebase->live);
+        $outbox = FirebaseTrackingOutbox::query()
+            ->where('delivery_id', $delivery->id)
+            ->firstOrFail();
+        $this->assertNull($outbox->processed_at);
+        $this->assertSame(1, $outbox->attempts);
+
+        $firebase->failPublish = false;
+        $outbox->forceFill(['available_at' => now()])->save();
+        $this->artisan('firebase-tracking:retry-outbox')
+            ->expectsOutputToContain('Published 1 pending Firebase tracking event')
+            ->assertSuccessful();
+
+        $this->assertNotNull($outbox->refresh()->processed_at);
+        $this->assertSame('delivered', $firebase->terminalStatuses[$delivery->id]);
+    }
 
     public function test_assigned_driver_cannot_submit_location_before_starting_delivery(): void
     {
@@ -440,5 +677,30 @@ class DriverLocationIngestionApiTest extends TestCase
             'battery_level' => 80,
             'recorded_at' => now()->subSeconds(5),
         ]);
+    }
+
+    private function markFirebaseSession(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+    ): DeliveryTrackingLocation {
+        return DeliveryTrackingLocation::query()->create([
+            'tracking_session_id' => $session->id,
+            'delivery_id' => $delivery->id,
+            'driver_id' => $driver->id,
+            'point_type' => 'start',
+            'latitude' => -6.7924000,
+            'longitude' => 39.2083000,
+            'recorded_at' => $session->started_at,
+        ]);
+    }
+
+    private function enableFirebaseTracking(): InMemoryFirebaseTrackingStore
+    {
+        config()->set('pelekapro.live_tracking.driver', 'firebase');
+        $store = new InMemoryFirebaseTrackingStore;
+        $this->app->instance(FirebaseTrackingStore::class, $store);
+
+        return $store;
     }
 }

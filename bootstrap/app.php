@@ -10,6 +10,7 @@ use App\Http\Middleware\EnsureCustomerTrackingAccess;
 use App\Http\Middleware\EnsureDriverAssignedDelivery;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -23,7 +24,13 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('firebase-tracking:retry-outbox')->everyMinute()->withoutOverlapping();
+        $schedule->command('firebase-tracking:prune-history')->dailyAt('02:30')->withoutOverlapping();
+    })
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: ['127.0.0.1', '::1']);
+
         $middleware->prependToPriorityList(
             ThrottleRequests::class,
             AddCustomerTrackingSecurityHeaders::class

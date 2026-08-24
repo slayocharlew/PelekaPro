@@ -2,13 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\FirebaseTrackingStore;
 use App\Models\Delivery;
+use App\Models\DeliveryTrackingLocation;
+use App\Models\DeliveryTrackingSession;
+use App\Models\User;
 use App\Services\CustomerTrackingChannelAlias;
 use App\Services\CustomerTrackingSessionService;
 use App\Services\LiveDeliveryLocationStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Kreait\Firebase\Contract\Auth as FirebaseAuth;
+use Lcobucci\JWT\UnencryptedToken;
+use Mockery;
+use Tests\Fakes\InMemoryFirebaseTrackingStore;
 use Tests\Support\CreatesCustomerTrackingFixtures;
 use Tests\TestCase;
 
@@ -61,6 +69,10 @@ class CustomerTrackingSnapshotTest extends TestCase
                     'event' => 'delivery.location.updated',
                     'status_event' => 'delivery.tracking.status.updated',
                 ],
+                'transport' => [
+                    'name' => 'reverb',
+                    'credentials_url' => null,
+                ],
             ])
             ->assertHeader('Cache-Control', 'no-store, private')
             ->assertHeader('Referrer-Policy', 'no-referrer');
@@ -96,6 +108,104 @@ class CustomerTrackingSnapshotTest extends TestCase
             ->assertJsonPath('delivery.tracking_active', true)
             ->assertJsonPath('delivery.live_location_available', false)
             ->assertJsonPath('live_location', null);
+    }
+
+    public function test_existing_redis_session_stays_on_reverb_when_default_changes_to_firebase(): void
+    {
+        $business = $this->customerTrackingBusiness();
+        $driver = $this->customerTrackingDriver($business);
+        $delivery = $this->activeCustomerTrackingDelivery($business, $driver);
+        $this->putCustomerTrackingLiveLocation($delivery, $driver);
+        config()->set('pelekapro.live_tracking.driver', 'firebase');
+
+        $this->snapshot($delivery)
+            ->assertOk()
+            ->assertJsonPath('delivery.live_location_available', true)
+            ->assertJsonPath('transport.name', 'reverb')
+            ->assertJsonPath('transport.credentials_url', null);
+    }
+
+    public function test_firebase_snapshot_uses_authoritative_scoped_live_state_and_firebase_transport(): void
+    {
+        config()->set('pelekapro.live_tracking.driver', 'firebase');
+        $firebase = new InMemoryFirebaseTrackingStore;
+        $this->app->instance(FirebaseTrackingStore::class, $firebase);
+        $business = $this->customerTrackingBusiness();
+        $driver = $this->customerTrackingDriver($business);
+        $delivery = $this->activeCustomerTrackingDelivery($business, $driver);
+        $session = $delivery->trackingSessions()->where('status', 'active')->firstOrFail();
+        $this->markFirebaseSession($delivery, $session, $driver);
+        $firebase->activate($delivery, $session, $driver);
+        $firebase->storeServerSample($delivery, $session, $driver, [
+            'latitude' => -6.7924,
+            'longitude' => 39.2083,
+            'accuracy' => 8.5,
+            'speed' => 6.2,
+            'heading' => 180,
+            'battery_level' => 80,
+            'recorded_at' => now()->subSecond()->toISOString(),
+        ]);
+
+        $response = $this->snapshot($delivery)
+            ->assertOk()
+            ->assertJsonPath('delivery.tracking_active', true)
+            ->assertJsonPath('delivery.live_location_available', true)
+            ->assertJsonPath('live_location.latitude', -6.7924)
+            ->assertJsonPath('transport.name', 'firebase')
+            ->assertJsonPath('transport.credentials_url', '/tracking/firebase-credentials');
+
+        $encoded = json_encode($response->json());
+        $this->assertStringNotContainsString('session_alias', $encoded);
+        $this->assertStringNotContainsString('driver_uid', $encoded);
+        $this->assertStringNotContainsString('credential_version', $encoded);
+        $this->assertStringNotContainsString('sample_id', $encoded);
+    }
+
+    public function test_customer_cookie_can_exchange_for_one_scoped_firebase_custom_token(): void
+    {
+        config()->set('pelekapro.live_tracking.driver', 'firebase');
+        $firebase = new InMemoryFirebaseTrackingStore;
+        $this->app->instance(FirebaseTrackingStore::class, $firebase);
+        $business = $this->customerTrackingBusiness();
+        $driver = $this->customerTrackingDriver($business);
+        $delivery = $this->activeCustomerTrackingDelivery($business, $driver);
+        $session = $delivery->trackingSessions()->where('status', 'active')->firstOrFail();
+        $this->markFirebaseSession($delivery, $session, $driver);
+        $firebase->activate($delivery, $session, $driver);
+        $firebase->storeServerSample($delivery, $session, $driver, [
+            'latitude' => -6.7924,
+            'longitude' => 39.2083,
+            'recorded_at' => now()->toISOString(),
+        ]);
+        $token = Mockery::mock(UnencryptedToken::class);
+        $token->shouldReceive('toString')->once()->andReturn('customer-firebase-token');
+        $auth = Mockery::mock(FirebaseAuth::class);
+        $auth->shouldReceive('createCustomToken')
+            ->once()
+            ->withArgs(fn (string $uid, array $claims, int $ttl): bool => str_starts_with($uid, 'customer_')
+                && $claims['tracking_role'] === 'customer'
+                && is_string($claims['delivery_alias'])
+                && strlen($claims['delivery_alias']) === 64
+                && is_string($claims['token_fingerprint'])
+                && $ttl > 0
+                && $ttl <= 1800)
+            ->andReturn($token);
+        $this->app->instance(FirebaseAuth::class, $auth);
+        $cookieName = app(CustomerTrackingSessionService::class)->cookieName();
+        $cookieValue = $this->customerTrackingCookieValue($delivery);
+        Auth::forgetGuards();
+
+        $response = $this->withCredentials()
+            ->withCookie($cookieName, $cookieValue)
+            ->postJson('/tracking/firebase-credentials')
+            ->assertOk()
+            ->assertJsonPath('data.token', 'customer-firebase-token');
+
+        $encoded = json_encode($response->json());
+        $this->assertStringNotContainsString('token_fingerprint', $encoded);
+        $this->assertStringNotContainsString('public_tracking_token', $encoded);
+        $this->assertStringNotContainsString('delivery_id', $encoded);
+        $this->assertStringNotContainsString('driver_id', $encoded);
     }
 
     public function test_expired_or_malformed_redis_state_is_never_returned_as_live(): void
@@ -196,5 +306,21 @@ class CustomerTrackingSnapshotTest extends TestCase
 
         return $this->withCredentials()->withCookie($cookieName, $cookieValue)
             ->getJson('/tracking/session');
+    }
+
+    private function markFirebaseSession(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+    ): void {
+        DeliveryTrackingLocation::query()->create([
+            'tracking_session_id' => $session->id,
+            'delivery_id' => $delivery->id,
+            'driver_id' => $driver->id,
+            'point_type' => 'start',
+            'latitude' => -6.7924000,
+            'longitude' => 39.2083000,
+            'recorded_at' => $session->started_at,
+        ]);
     }
 }

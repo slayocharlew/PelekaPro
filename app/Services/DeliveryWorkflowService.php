@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Contracts\FirebaseTrackingStore;
 use App\Events\DeliveryTrackingStatusUpdated;
 use App\Exceptions\DeliveryWorkflowException;
 use App\Models\Delivery;
 use App\Models\DeliveryPayment;
+use App\Models\DeliveryTrackingLocation;
 use App\Models\DeliveryTrackingSession;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -26,47 +28,91 @@ class DeliveryWorkflowService
     public function __construct(
         private readonly LiveDeliveryLocationStore $liveLocationStore,
         private readonly CustomerTrackingChannelAlias $customerChannelAliases,
+        private readonly FirebaseTrackingStore $firebaseTrackingStore,
+        private readonly FirebaseTrackingOutboxService $firebaseOutbox,
+        private readonly FirebaseTrackingSessionMode $firebaseMode,
     ) {}
 
-    public function start(Delivery $delivery, User $driver): Delivery
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function start(Delivery $delivery, User $driver, array $payload = []): Delivery
     {
-        return DB::transaction(function () use ($delivery, $driver): Delivery {
-            $lockedDelivery = $this->lockDelivery($delivery);
-            $this->assertAssignedDriver($lockedDelivery, $driver);
-            $this->assertDriverProfileActive($driver);
+        $firebaseActivationAttempted = false;
 
-            if ($lockedDelivery->started_at !== null || ! in_array($lockedDelivery->status, self::STARTABLE_STATUSES, true)) {
-                throw new DeliveryWorkflowException('This delivery cannot be started.');
+        try {
+            return DB::transaction(function () use ($delivery, $driver, $payload, &$firebaseActivationAttempted): Delivery {
+                $lockedDelivery = $this->lockDelivery($delivery);
+                $this->assertAssignedDriver($lockedDelivery, $driver);
+                $this->assertDriverProfileActive($driver);
+
+                if ($lockedDelivery->started_at !== null || ! in_array($lockedDelivery->status, self::STARTABLE_STATUSES, true)) {
+                    throw new DeliveryWorkflowException('This delivery cannot be started.');
+                }
+
+                $activeSession = DeliveryTrackingSession::query()
+                    ->where('delivery_id', $lockedDelivery->getKey())
+                    ->where('status', 'active')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($activeSession) {
+                    throw new DeliveryWorkflowException('This delivery already has an active tracking session.');
+                }
+
+                $fromStatus = $lockedDelivery->status;
+                $startedAt = now();
+
+                $lockedDelivery->forceFill([
+                    'status' => 'on_the_way',
+                    'started_at' => $startedAt,
+                ])->save();
+
+                $session = $lockedDelivery->trackingSessions()->create([
+                    'driver_id' => $driver->getKey(),
+                    'status' => 'active',
+                    'started_at' => $startedAt,
+                ]);
+
+                if ($this->firebaseTrackingStore->enabled()) {
+                    $startLocation = $this->storeBoundaryLocation(
+                        $lockedDelivery,
+                        $session,
+                        $driver,
+                        'start',
+                        $payload,
+                        'latitude',
+                        'longitude',
+                        $startedAt,
+                    );
+                    $firebaseActivationAttempted = true;
+                    $this->firebaseTrackingStore->activate($lockedDelivery, $session, $driver);
+                    $this->firebaseTrackingStore->storeServerSample(
+                        $lockedDelivery,
+                        $session,
+                        $driver,
+                        $this->locationPayloadFromModel($startLocation),
+                    );
+                }
+
+                $this->logStatusChange($lockedDelivery, $fromStatus, 'on_the_way', $driver, 'Driver started delivery');
+
+                return $lockedDelivery->refresh();
+            });
+        } catch (Throwable $throwable) {
+            if ($firebaseActivationAttempted) {
+                try {
+                    $this->firebaseTrackingStore->removeActivation($delivery);
+                } catch (Throwable $cleanupFailure) {
+                    Log::critical('Unable to remove a rolled-back Firebase tracking activation.', [
+                        'delivery_id' => $delivery->getKey(),
+                        'exception_type' => $cleanupFailure::class,
+                    ]);
+                }
             }
 
-            $activeSession = DeliveryTrackingSession::query()
-                ->where('delivery_id', $lockedDelivery->getKey())
-                ->where('status', 'active')
-                ->lockForUpdate()
-                ->first();
-
-            if ($activeSession) {
-                throw new DeliveryWorkflowException('This delivery already has an active tracking session.');
-            }
-
-            $fromStatus = $lockedDelivery->status;
-            $startedAt = now();
-
-            $lockedDelivery->forceFill([
-                'status' => 'on_the_way',
-                'started_at' => $startedAt,
-            ])->save();
-
-            $lockedDelivery->trackingSessions()->create([
-                'driver_id' => $driver->getKey(),
-                'status' => 'active',
-                'started_at' => $startedAt,
-            ]);
-
-            $this->logStatusChange($lockedDelivery, $fromStatus, 'on_the_way', $driver, 'Driver started delivery');
-
-            return $lockedDelivery->refresh();
-        });
+            throw $throwable;
+        }
     }
 
     /**
@@ -75,9 +121,16 @@ class DeliveryWorkflowService
     public function complete(Delivery $delivery, User $driver, array $payload): Delivery
     {
         $storedProofPath = $this->storeProofFile($payload['proof_file'] ?? null, 'delivery-proofs');
+        $firebaseTerminalState = null;
 
         try {
-            $completedDelivery = DB::transaction(function () use ($delivery, $driver, $payload, $storedProofPath): Delivery {
+            $completedDelivery = DB::transaction(function () use (
+                $delivery,
+                $driver,
+                $payload,
+                $storedProofPath,
+                &$firebaseTerminalState,
+            ): Delivery {
                 $lockedDelivery = $this->lockDelivery($delivery);
                 $this->assertAssignedDriver($lockedDelivery, $driver);
                 $this->assertDriverProfileActive($driver);
@@ -87,6 +140,7 @@ class DeliveryWorkflowService
                 }
 
                 $activeSession = $this->oneActiveSession($lockedDelivery, $driver);
+                $firebaseTerminalState = $this->prepareTerminalTransition($lockedDelivery, $activeSession);
                 $fromStatus = $lockedDelivery->status;
                 $deliveredAt = now();
 
@@ -119,12 +173,27 @@ class DeliveryWorkflowService
                 );
 
                 $this->syncDeliveredPayment($lockedDelivery, $driver, $payload, $deliveredAt);
+                $this->storeTerminalLocation(
+                    $lockedDelivery,
+                    $activeSession,
+                    $driver,
+                    $payload,
+                    'delivered_latitude',
+                    'delivered_longitude',
+                    $deliveredAt,
+                    $firebaseTerminalState,
+                );
                 $this->closeSession($activeSession, 'delivered', $deliveredAt);
                 $this->logStatusChange($lockedDelivery, $fromStatus, 'delivered', $driver, $payload['note'] ?? 'Delivery completed');
+                $this->firebaseOutbox->recordTerminal(
+                    $lockedDelivery,
+                    $this->firebaseMode->forDelivery($lockedDelivery, $activeSession),
+                );
 
                 return $lockedDelivery->refresh();
             });
         } catch (Throwable $throwable) {
+            $this->restoreAfterFailedTerminal($delivery, $firebaseTerminalState);
             $this->deleteStoredFile($storedProofPath);
 
             throw $throwable;
@@ -141,9 +210,16 @@ class DeliveryWorkflowService
     public function fail(Delivery $delivery, User $driver, array $payload): Delivery
     {
         $storedProofPath = $this->storeProofFile($payload['proof_file'] ?? null, 'delivery-failures');
+        $firebaseTerminalState = null;
 
         try {
-            $failedDelivery = DB::transaction(function () use ($delivery, $driver, $payload, $storedProofPath): Delivery {
+            $failedDelivery = DB::transaction(function () use (
+                $delivery,
+                $driver,
+                $payload,
+                $storedProofPath,
+                &$firebaseTerminalState,
+            ): Delivery {
                 $lockedDelivery = $this->lockDelivery($delivery);
                 $this->assertAssignedDriver($lockedDelivery, $driver);
                 $this->assertDriverProfileActive($driver);
@@ -153,6 +229,7 @@ class DeliveryWorkflowService
                 }
 
                 $activeSession = $this->oneActiveSession($lockedDelivery, $driver);
+                $firebaseTerminalState = $this->prepareTerminalTransition($lockedDelivery, $activeSession);
                 $fromStatus = $lockedDelivery->status;
                 $failedAt = now();
 
@@ -171,12 +248,27 @@ class DeliveryWorkflowService
                     'failed_at' => $failedAt,
                 ]);
 
+                $this->storeTerminalLocation(
+                    $lockedDelivery,
+                    $activeSession,
+                    $driver,
+                    $payload,
+                    'failed_latitude',
+                    'failed_longitude',
+                    $failedAt,
+                    $firebaseTerminalState,
+                );
                 $this->closeSession($activeSession, 'failed', $failedAt);
                 $this->logStatusChange($lockedDelivery, $fromStatus, 'failed', $driver, $payload['note'] ?? 'Delivery failed');
+                $this->firebaseOutbox->recordTerminal(
+                    $lockedDelivery,
+                    $this->firebaseMode->forDelivery($lockedDelivery, $activeSession),
+                );
 
                 return $lockedDelivery->refresh();
             });
         } catch (Throwable $throwable) {
+            $this->restoreAfterFailedTerminal($delivery, $firebaseTerminalState);
             $this->deleteStoredFile($storedProofPath);
 
             throw $throwable;
@@ -199,6 +291,76 @@ class DeliveryWorkflowService
             ]);
     }
 
+    /**
+     * @return array{control: array<string, mixed>, live: array<string, mixed>|null}|null
+     */
+    public function prepareCancellation(Delivery $delivery): ?array
+    {
+        $sessions = DeliveryTrackingSession::query()
+            ->where('delivery_id', $delivery->getKey())
+            ->where('status', 'active')
+            ->whereNull('stopped_at')
+            ->lockForUpdate()
+            ->get();
+
+        if ($sessions->isEmpty()) {
+            return null;
+        }
+
+        if ($sessions->count() !== 1) {
+            throw new DeliveryWorkflowException('This delivery does not have exactly one active tracking session.');
+        }
+
+        return $this->prepareTerminalTransition($delivery, $sessions->first());
+    }
+
+    /**
+     * @param  array{control: array<string, mixed>, live: array<string, mixed>|null}|null  $state
+     */
+    public function storeCancellationEndLocation(Delivery $delivery, ?array $state): void
+    {
+        if ($state === null) {
+            return;
+        }
+
+        $session = DeliveryTrackingSession::query()
+            ->where('delivery_id', $delivery->getKey())
+            ->where('status', 'active')
+            ->whereNull('stopped_at')
+            ->lockForUpdate()
+            ->first();
+        $driver = $delivery->assignedDriver()->first();
+
+        if ($session && $driver) {
+            $this->storeTerminalLocation(
+                $delivery,
+                $session,
+                $driver,
+                [],
+                'cancelled_latitude',
+                'cancelled_longitude',
+                $delivery->cancelled_at ?? now(),
+                $state,
+            );
+        }
+    }
+
+    /**
+     * @param  array{control: array<string, mixed>, live: array<string, mixed>|null}|null  $state
+     */
+    public function restoreAfterFailedCancellation(Delivery $delivery, ?array $state): void
+    {
+        $this->restoreAfterFailedTerminal($delivery, $state);
+    }
+
+    public function recordCancellationOutbox(Delivery $delivery): void
+    {
+        $this->firebaseOutbox->recordTerminal(
+            $delivery,
+            $this->firebaseMode->forDelivery($delivery),
+        );
+    }
+
     public function forgetLiveLocation(Delivery $delivery): void
     {
         try {
@@ -213,6 +375,12 @@ class DeliveryWorkflowService
 
     public function finalizeTerminalTransition(Delivery $delivery): void
     {
+        if ($this->firebaseMode->forDelivery($delivery)) {
+            $this->firebaseOutbox->publishTerminal($delivery, true);
+
+            return;
+        }
+
         $this->forgetLiveLocation($delivery);
 
         try {
@@ -224,6 +392,95 @@ class DeliveryWorkflowService
             Log::warning('Unable to broadcast terminal delivery tracking status.', [
                 'delivery_id' => $delivery->getKey(),
                 'status' => $delivery->status,
+                'exception_type' => $throwable::class,
+            ]);
+        }
+    }
+
+    /**
+     * @return array{control: array<string, mixed>, live: array<string, mixed>|null}|null
+     */
+    private function prepareTerminalTransition(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+    ): ?array {
+        if (! $this->firebaseMode->forDelivery($delivery, $session)) {
+            return null;
+        }
+
+        return $this->firebaseTrackingStore->revokeForTerminal($delivery, $session);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array{control: array<string, mixed>, live: array<string, mixed>|null}|null  $firebaseState
+     */
+    private function storeTerminalLocation(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+        array $payload,
+        string $latitudeKey,
+        string $longitudeKey,
+        mixed $occurredAt,
+        ?array $firebaseState,
+    ): void {
+        if (! $this->firebaseMode->forDelivery($delivery, $session)) {
+            return;
+        }
+
+        $fallback = $firebaseState['live'] ?? null;
+        $latitude = $payload[$latitudeKey] ?? $fallback['latitude'] ?? null;
+        $longitude = $payload[$longitudeKey] ?? $fallback['longitude'] ?? null;
+
+        if ($latitude === null || $longitude === null) {
+            return;
+        }
+
+        if (isset($payload[$latitudeKey], $payload[$longitudeKey])) {
+            $payload['recorded_at'] = $occurredAt;
+        }
+
+        $this->storeBoundaryLocation(
+            $delivery,
+            $session,
+            $driver,
+            'end',
+            $payload,
+            $latitudeKey,
+            $longitudeKey,
+            $occurredAt,
+            $fallback,
+        );
+    }
+
+    /**
+     * @param  array{control: array<string, mixed>, live: array<string, mixed>|null}|null  $state
+     */
+    private function restoreAfterFailedTerminal(Delivery $delivery, ?array $state): void
+    {
+        if ($state === null) {
+            return;
+        }
+
+        try {
+            $authoritative = Delivery::query()->find($delivery->getKey());
+
+            if (! $authoritative
+                || $authoritative->started_at === null
+                || ! in_array($authoritative->status, self::IN_PROGRESS_STATUSES, true)
+                || ! $authoritative->trackingSessions()
+                    ->where('status', 'active')
+                    ->whereNull('stopped_at')
+                    ->exists()
+            ) {
+                return;
+            }
+
+            $this->firebaseTrackingStore->restoreAfterFailedTerminal($authoritative, $state);
+        } catch (Throwable $throwable) {
+            Log::critical('Unable to restore Firebase tracking after a rolled-back terminal transition.', [
+                'delivery_id' => $delivery->getKey(),
                 'exception_type' => $throwable::class,
             ]);
         }
@@ -288,6 +545,63 @@ class DeliveryWorkflowService
             'stopped_at' => $stoppedAt,
             'stop_reason' => $reason,
         ])->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>|null  $fallback
+     */
+    private function storeBoundaryLocation(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+        string $pointType,
+        array $payload,
+        string $latitudeKey,
+        string $longitudeKey,
+        mixed $occurredAt,
+        ?array $fallback = null,
+    ): DeliveryTrackingLocation {
+        $latitude = $payload[$latitudeKey] ?? $fallback['latitude'] ?? null;
+        $longitude = $payload[$longitudeKey] ?? $fallback['longitude'] ?? null;
+
+        if ($latitude === null || $longitude === null) {
+            throw new DeliveryWorkflowException("A current {$pointType} location is required.", 422);
+        }
+
+        return DeliveryTrackingLocation::query()->updateOrCreate(
+            [
+                'tracking_session_id' => $session->getKey(),
+                'point_type' => $pointType,
+            ],
+            [
+                'delivery_id' => $delivery->getKey(),
+                'driver_id' => $driver->getKey(),
+                'latitude' => number_format((float) $latitude, 7, '.', ''),
+                'longitude' => number_format((float) $longitude, 7, '.', ''),
+                'accuracy' => $payload['accuracy'] ?? $fallback['accuracy'] ?? null,
+                'speed' => $payload['speed'] ?? $fallback['speed'] ?? null,
+                'heading' => $payload['heading'] ?? $fallback['heading'] ?? null,
+                'battery_level' => $payload['battery_level'] ?? $fallback['battery_level'] ?? null,
+                'recorded_at' => $payload['recorded_at'] ?? $fallback['recorded_at'] ?? $occurredAt,
+            ]
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function locationPayloadFromModel(DeliveryTrackingLocation $location): array
+    {
+        return [
+            'latitude' => (float) $location->latitude,
+            'longitude' => (float) $location->longitude,
+            'accuracy' => $location->accuracy !== null ? (float) $location->accuracy : null,
+            'speed' => $location->speed !== null ? (float) $location->speed : null,
+            'heading' => $location->heading !== null ? (float) $location->heading : null,
+            'battery_level' => $location->battery_level,
+            'recorded_at' => $location->recorded_at->clone()->utc()->toISOString(),
+        ];
     }
 
     /**

@@ -37,7 +37,6 @@ class DeliveryController extends Controller
             'status' => ['nullable', Rule::in(DeliveryManagementService::STATUSES)],
             'assigned_driver_id' => ['nullable', 'integer'],
             'business_id' => ['nullable', 'integer', 'exists:businesses,id'],
-            'per_page' => ['nullable', 'integer', Rule::in([15, 30, 50])],
         ]);
 
         $user = $request->user('web');
@@ -52,7 +51,7 @@ class DeliveryController extends Controller
 
         $deliveries = $query
             ->latest()
-            ->paginate((int) ($filters['per_page'] ?? 15))
+            ->paginate(10)
             ->withQueryString();
         $editableDeliveryIds = $deliveries->getCollection()
             ->filter(fn (Delivery $delivery): bool => $this->deliveries->isEditable($delivery))

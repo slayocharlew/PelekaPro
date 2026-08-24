@@ -36,6 +36,16 @@ class FailDeliveryRequest extends FormRequest
         ];
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($this->filled('failed_latitude') xor $this->filled('failed_longitude')) {
+                $validator->errors()->add('failed_latitude', 'Failed latitude and longitude must be provided together.');
+                $validator->errors()->add('failed_longitude', 'Failed latitude and longitude must be provided together.');
+            }
+        });
+    }
+
     protected function failedValidation(Validator $validator): void
     {
         throw new HttpResponseException(response()->json([

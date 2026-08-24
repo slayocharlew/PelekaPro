@@ -7,8 +7,9 @@ PelekaPro uses the Google Maps JavaScript API for:
 - business branch/shop location selection.
 
 It does not use the Places, Routes, Roads, Geocoding, or Street View APIs.
-GPS ingestion, Redis latest-location storage, and Reverb broadcasts remain
-PelekaPro services and do not call Google Maps.
+GPS ingestion and the selected PelekaPro live-tracking transport remain separate
+from Google Maps. Redis/Reverb rollback mode and Firebase Realtime Database mode
+do not call the Maps APIs when a GPS point changes.
 
 ## Local configuration
 
@@ -45,8 +46,9 @@ Create billing alerts at USD $1, $5, and $10. Budget alerts do not stop usage;
 the API quota is the hard protection against unexpected map-load charges.
 
 Customer live tracking initializes Google Maps only after PelekaPro receives a
-fresh, authoritative live location. Reverb marker updates reuse that map and do
-not recreate it. Location-selection pages initialize one map when opened.
+fresh, authoritative live location. Reverb or Firebase marker updates reuse that
+map and do not recreate it. Location-selection pages initialize one map when
+opened.
 
 If the API key, Map ID, network, referrer authorization, or quota is unavailable,
 PelekaPro shows a safe map-unavailable message. Browser GPS remains available

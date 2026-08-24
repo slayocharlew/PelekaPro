@@ -34,6 +34,7 @@ class PortalBusinessOnboardingTest extends TestCase
         $this->actingAs($superAdmin, 'web')
             ->get(route('portal.businesses.index'))
             ->assertOk()
+            ->assertViewHas('businesses', fn ($businesses): bool => $businesses->perPage() === 10)
             ->assertSee('Businesses')
             ->assertSee('Register business');
 

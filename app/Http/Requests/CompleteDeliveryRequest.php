@@ -62,6 +62,11 @@ class CompleteDeliveryRequest extends FormRequest
             if ($paymentNotRequired && $this->filled('collected_amount') && (float) $this->input('collected_amount') > 0) {
                 $validator->errors()->add('collected_amount', 'This delivery does not require payment collection.');
             }
+
+            if ($this->filled('delivered_latitude') xor $this->filled('delivered_longitude')) {
+                $validator->errors()->add('delivered_latitude', 'Delivered latitude and longitude must be provided together.');
+                $validator->errors()->add('delivered_longitude', 'Delivered latitude and longitude must be provided together.');
+            }
         });
     }
 

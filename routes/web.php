@@ -77,6 +77,14 @@ Route::get('/tracking/session', [CustomerTrackingController::class, 'show'])
     ])
     ->name('customer.tracking.session.show');
 
+Route::post('/tracking/firebase-credentials', [CustomerTrackingController::class, 'firebaseCredentials'])
+    ->middleware([
+        'customer.tracking.headers',
+        'throttle:customer-firebase-credentials',
+        'customer.tracking',
+    ])
+    ->name('customer.tracking.firebase-credentials');
+
 Route::delete('/tracking/session', [CustomerTrackingController::class, 'destroy'])
     ->middleware([
         'customer.tracking.headers',

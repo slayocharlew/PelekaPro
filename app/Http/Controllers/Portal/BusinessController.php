@@ -29,7 +29,7 @@ class BusinessController extends Controller
                     ->with(['role', 'branch']),
             ])
             ->latest()
-            ->paginate(15);
+            ->paginate(10);
 
         return view('portal.businesses.index', compact('businesses'));
     }

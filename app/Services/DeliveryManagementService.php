@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class DeliveryManagementService
 {
@@ -261,37 +262,53 @@ class DeliveryManagementService
 
     public function cancel(Delivery $delivery, ?User $user, ?string $note = null): Delivery
     {
-        $cancelled = DB::transaction(function () use ($delivery, $user, $note): Delivery {
-            $lockedDelivery = Delivery::query()
-                ->whereKey($delivery->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
+        $firebaseTerminalState = null;
 
-            if (! $this->isCancellable($lockedDelivery)) {
-                throw new DeliveryWorkflowException(
-                    'Delivered, failed, or already cancelled deliveries cannot be cancelled.',
-                    422
-                );
-            }
-
-            $fromStatus = $lockedDelivery->status;
-
-            $lockedDelivery->forceFill([
-                'status' => 'cancelled',
-                'cancelled_at' => now(),
-            ])->save();
-
-            $this->workflow->closeActiveSessionsForCancellation($lockedDelivery);
-            $this->logStatusChange(
-                $lockedDelivery,
-                $fromStatus,
-                'cancelled',
+        try {
+            $cancelled = DB::transaction(function () use (
+                $delivery,
                 $user,
-                $note ?: 'Delivery cancelled'
-            );
+                $note,
+                &$firebaseTerminalState,
+            ): Delivery {
+                $lockedDelivery = Delivery::query()
+                    ->whereKey($delivery->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-            return $lockedDelivery->refresh();
-        });
+                if (! $this->isCancellable($lockedDelivery)) {
+                    throw new DeliveryWorkflowException(
+                        'Delivered, failed, or already cancelled deliveries cannot be cancelled.',
+                        422
+                    );
+                }
+
+                $fromStatus = $lockedDelivery->status;
+                $firebaseTerminalState = $this->workflow->prepareCancellation($lockedDelivery);
+
+                $lockedDelivery->forceFill([
+                    'status' => 'cancelled',
+                    'cancelled_at' => now(),
+                ])->save();
+
+                $this->workflow->storeCancellationEndLocation($lockedDelivery, $firebaseTerminalState);
+                $this->workflow->closeActiveSessionsForCancellation($lockedDelivery);
+                $this->logStatusChange(
+                    $lockedDelivery,
+                    $fromStatus,
+                    'cancelled',
+                    $user,
+                    $note ?: 'Delivery cancelled'
+                );
+                $this->workflow->recordCancellationOutbox($lockedDelivery);
+
+                return $lockedDelivery->refresh();
+            });
+        } catch (Throwable $throwable) {
+            $this->workflow->restoreAfterFailedCancellation($delivery, $firebaseTerminalState);
+
+            throw $throwable;
+        }
 
         $this->workflow->finalizeTerminalTransition($cancelled);
 

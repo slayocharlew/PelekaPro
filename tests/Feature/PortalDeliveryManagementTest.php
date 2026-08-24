@@ -60,6 +60,51 @@ class PortalDeliveryManagementTest extends TestCase
         }
     }
 
+    public function test_delivery_list_paginates_ten_records_and_keeps_ajax_filters_business_scoped(): void
+    {
+        $business = $this->business('Paginated Business');
+        $otherBusiness = $this->business('Hidden Paginated Business');
+        $owner = $this->userWithRole('business_owner', $business);
+
+        foreach (range(1, 12) as $offset) {
+            $delivery = $this->deliveryFor($business);
+            $delivery->forceFill(['created_at' => now()->addSeconds($offset)])->save();
+        }
+
+        $hiddenDelivery = $this->deliveryFor($otherBusiness);
+
+        $this->actingAs($owner, 'web')
+            ->get(route('portal.deliveries.index'))
+            ->assertOk()
+            ->assertViewHas('deliveries', fn ($deliveries): bool => $deliveries->perPage() === 10
+                && $deliveries->count() === 10
+                && $deliveries->total() === 12)
+            ->assertDontSee($hiddenDelivery->delivery_number);
+
+        $this->actingAs($owner, 'web')
+            ->get(route('portal.deliveries.index', ['page' => 2]))
+            ->assertOk()
+            ->assertViewHas('deliveries', fn ($deliveries): bool => $deliveries->count() === 2
+                && $deliveries->currentPage() === 2);
+
+        $matchingDelivery = Delivery::query()
+            ->where('business_id', $business->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->actingAs($owner, 'web')
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get(route('portal.deliveries.index', [
+                'search' => $matchingDelivery->delivery_number,
+                'status' => $matchingDelivery->status,
+            ]))
+            ->assertOk()
+            ->assertSee('data-delivery-browser', false)
+            ->assertSee('data-delivery-filter-form', false)
+            ->assertSee($matchingDelivery->delivery_number)
+            ->assertDontSee($hiddenDelivery->delivery_number);
+    }
+
     public function test_unauthenticated_driver_customer_and_inactive_users_cannot_access_portal_deliveries(): void
     {
         $business = $this->business('Access Business');
@@ -200,7 +245,11 @@ class PortalDeliveryManagementTest extends TestCase
             ->get(route('portal.deliveries.show', $delivery))
             ->assertOk()
             ->assertSee(route('customer.tracking.enter', $delivery->public_tracking_token), false)
-            ->assertSee('Status history');
+            ->assertSee('Status history')
+            ->assertSee('Customer and route')
+            ->assertDontSee('Drop-off coordinates')
+            ->assertDontSee('Timestamps')
+            ->assertDontSee('Internal status note');
 
         $this->actingAs($owner, 'web')
             ->get(route('portal.deliveries.show', $otherDelivery))

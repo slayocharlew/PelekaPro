@@ -6,6 +6,7 @@ use App\Auth\CustomerTrackingPrincipal;
 use App\Models\Delivery;
 use App\Services\CustomerTrackingSessionService;
 use App\Services\CustomerTrackingSnapshotService;
+use App\Services\FirebaseTrackingCredentialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,17 @@ class CustomerTrackingController extends Controller
         return response()
             ->noContent()
             ->withCookie($sessions->forgetCookie());
+    }
+
+    public function firebaseCredentials(
+        FirebaseTrackingCredentialService $credentials,
+    ): JsonResponse {
+        $principal = auth('customer_tracking')->user();
+        abort_unless($principal instanceof CustomerTrackingPrincipal, 401);
+
+        return response()->json([
+            'data' => $credentials->forCustomer($principal),
+        ]);
     }
 
     private function invalid(): Response

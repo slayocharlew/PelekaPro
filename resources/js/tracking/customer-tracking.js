@@ -1,5 +1,6 @@
 import { disconnectEcho, getEcho } from '../echo';
 import { CustomerTrackingMap } from './map-adapter';
+import { CustomerFirebaseTracking } from './firebase-tracking';
 import {
     ACTIVE_STATUSES,
     STATUS_PRESENTATION,
@@ -27,6 +28,19 @@ class CustomerTrackingPage {
         this.sessionExpiresAt = Number(root.dataset.sessionExpiresAt) * 1_000;
         this.state = createInitialState();
         this.echo = null;
+        this.firebase = new CustomerFirebaseTracking({
+            csrfToken: () => this.csrfToken(),
+            onLocation: (payload) => this.handleLocationEvent(payload),
+            onTerminal: (payload) => this.handleTerminalEvent(payload),
+            onUnavailable: (connectionFailed) => this.handleFirebaseUnavailable(connectionFailed),
+            onConnected: () => {
+                if (!this.ended) {
+                    this.setConnection('live', 'Live connection');
+                    this.scheduleSnapshot('firebase-connected', true);
+                }
+            },
+        });
+        this.firebaseCredentialsUrl = null;
         this.channel = null;
         this.channelName = null;
         this.snapshotPromise = null;
@@ -247,7 +261,15 @@ class CustomerTrackingPage {
                 return;
             }
 
-            this.subscribe(snapshot.channelName, snapshot.locationEvent, snapshot.statusEvent);
+            if (snapshot.transportName === 'firebase') {
+                this.subscribeFirebase(snapshot.firebaseCredentialsUrl);
+            } else if (snapshot.transportName === 'reverb') {
+                this.subscribe(snapshot.channelName, snapshot.locationEvent, snapshot.statusEvent);
+            } else {
+                this.leaveChannel();
+                this.firebase.disconnect();
+                this.setConnection('connecting', 'Waiting for tracking');
+            }
         } catch {
             if (!this.ended) {
                 this.showAlert('Live tracking is temporarily unavailable. Your delivery status will remain visible.');
@@ -258,6 +280,49 @@ class CustomerTrackingPage {
                 window.setTimeout(() => this.scheduleSnapshot('network-retry'), SNAPSHOT_RETRY_MS);
             }
         }
+    }
+
+    async subscribeFirebase(credentialsUrl) {
+        if (this.ended || this.firebaseCredentialsUrl === credentialsUrl) {
+            return;
+        }
+
+        this.leaveChannel();
+        disconnectEcho();
+        this.echo = null;
+        this.firebaseCredentialsUrl = credentialsUrl;
+        this.setConnection('connecting', 'Connecting securely');
+
+        try {
+            await this.firebase.connect(credentialsUrl);
+        } catch {
+            this.firebaseCredentialsUrl = null;
+            this.setConnection('reconnecting', 'Reconnecting');
+            this.scheduleSnapshot('firebase-connection-failed');
+        }
+    }
+
+    handleFirebaseUnavailable(connectionFailed = false) {
+        if (this.ended) {
+            return;
+        }
+
+        this.state = {
+            ...this.state,
+            liveLocationAvailable: false,
+            location: null,
+        };
+        this.renderLocation();
+        this.renderStatus();
+        if (connectionFailed) {
+            this.setConnection(
+                navigator.onLine ? 'reconnecting' : 'offline',
+                navigator.onLine ? 'Reconnecting' : 'Temporarily offline'
+            );
+        } else {
+            this.setConnection('live', 'Live connection');
+        }
+        this.scheduleSnapshot('firebase-unavailable');
     }
 
     subscribe(channelName, locationEvent, statusEvent) {
@@ -519,6 +584,8 @@ class CustomerTrackingPage {
     finishTerminalState() {
         this.ended = true;
         this.leaveChannel();
+        this.firebase.disconnect();
+        this.firebaseCredentialsUrl = null;
         disconnectEcho();
         this.echo = null;
         this.map.hideLocation();
@@ -532,6 +599,8 @@ class CustomerTrackingPage {
         this.state = createInitialState();
         this.state.ended = true;
         this.leaveChannel();
+        this.firebase.disconnect();
+        this.firebaseCredentialsUrl = null;
         disconnectEcho();
         this.map.destroy();
         window.clearTimeout(this.snapshotTimer);

@@ -14,6 +14,7 @@ class DeliveryTrackingLocation extends Model
         'tracking_session_id',
         'delivery_id',
         'driver_id',
+        'point_type',
         'latitude',
         'longitude',
         'speed',
@@ -30,6 +31,7 @@ class DeliveryTrackingLocation extends Model
         'heading' => 'decimal:2',
         'accuracy' => 'decimal:2',
         'battery_level' => 'integer',
+        'point_type' => 'string',
         'recorded_at' => 'datetime',
     ];
 

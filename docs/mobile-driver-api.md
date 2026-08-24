@@ -16,9 +16,9 @@ Laravel API
         ↓
 Authorization, workflow rules, transactions, and validation
         ↓
-MySQL permanent history + Redis temporary latest location
+MySQL authoritative workflow and start/end GPS evidence
         ↓
-Laravel Reverb broadcasts accepted current state
+Firebase RTDB intermediate history + current live point
 ```
 
 ### Flutter is responsible for
@@ -26,9 +26,10 @@ Laravel Reverb broadcasts accepted current state
 - collecting login credentials and sending them only to the login endpoint;
 - keeping the returned bearer token in Android secure storage;
 - rendering only the deliveries returned for the authenticated driver;
-- submitting user-entered proof, PIN, collection, and failure information;
+- submitting user-entered proof, collection, and failure information;
 - starting GPS only after a successful start-delivery response;
-- sending GPS samples approximately every five seconds;
+- writing scoped GPS samples to Firebase approximately every five seconds after
+  obtaining a short-lived credential from Laravel;
 - stopping GPS immediately after delivery, failure, cancellation, logout, an
   invalid session, or a server response saying tracking is no longer active;
 - handling offline, timeout, validation, authorization, and throttling states;
@@ -41,12 +42,13 @@ Laravel Reverb broadcasts accepted current state
   expected payment, and authoritative payment method;
 - enforcing business isolation and assigned-driver ownership;
 - enforcing delivery status transitions and preventing duplicate transitions;
-- persisting tracking history in MySQL;
-- deciding whether a location becomes the latest Redis location;
-- closing tracking sessions and removing Redis live state after terminal states;
-- broadcasting only accepted latest locations and terminal delivery states.
+- storing authoritative start/end GPS evidence in MySQL;
+- issuing short-lived, delivery-scoped Firebase custom tokens;
+- activating and revoking Firebase access from authoritative MySQL state;
+- closing tracking sessions, removing live state, and publishing terminal state.
 
-Flutter must never connect directly to MySQL or Redis and must never submit
+Flutter must never connect directly to MySQL or Redis. Its Firebase access is
+limited to the opaque paths and claims returned by Laravel; it must never submit
 server-controlled ownership fields.
 
 ### Business branch pickup location
@@ -139,10 +141,11 @@ All routes except login use both `auth:sanctum` and `active.api.user`.
 | `GET` | `/api/driver/deliveries` | Render assigned-delivery list | Return only deliveries assigned to `users.id` |
 | `GET` | `/api/driver/deliveries/{delivery}` | Render detail and available failure reasons | Enforce assignment/business ownership |
 | `POST` | `/api/driver/deliveries/{delivery}/start` | Start workflow, then GPS after success | Atomically start delivery and tracking session |
-| `POST` | `/api/driver/deliveries/{delivery}/locations` | Submit device GPS samples | Persist history and conditionally update/broadcast live state |
-| `POST` | `/api/driver/deliveries/{delivery}/deliver` | Submit delivery outcome, proof, and collection | Validate PIN/payment and atomically finish tracking |
+| `POST` | `/api/driver/deliveries/{delivery}/tracking-credentials` | Refresh a short-lived Firebase lease | Revalidate MySQL authority and issue one scoped custom token |
+| `POST` | `/api/driver/deliveries/{delivery}/locations` | Legacy/rollback GPS submission | Validate authority and forward to the selected transport |
+| `POST` | `/api/driver/deliveries/{delivery}/deliver` | Submit delivery outcome, proof, and collection | Validate payment and atomically finish tracking |
 | `POST` | `/api/driver/deliveries/{delivery}/fail` | Submit an allowed failure reason and optional proof | Atomically record failure and finish tracking |
-| `GET` | `/api/deliveries/{delivery}/tracking-locations` | Optional authorized history/diagnostics | Return paginated MySQL history, never public live state |
+| `GET` | `/api/deliveries/{delivery}/tracking-locations` | Optional authorized history/diagnostics | Return MySQL history in Redis mode or cursor-paginated Firebase history in Firebase mode |
 
 The Flutter driver application must not use delivery CRUD, available-driver,
 assignment, unassignment, or cancellation endpoints. Those are privileged
@@ -191,7 +194,7 @@ Other failures normally use:
 | `403` | Authenticated but account/action/delivery is forbidden | Stop sensitive action and show a safe denial |
 | `404` | Route-model delivery does not exist or is unavailable | Remove stale navigation and refresh assigned list |
 | `409` | Delivery state transition or tracking state is no longer valid | Stop GPS when relevant and refetch delivery |
-| `422` | Invalid credentials, fields, PIN, payment, timestamp, or rule | Render field errors without discarding valid form input |
+| `422` | Invalid credentials, fields, payment, timestamp, or rule | Render field errors without discarding valid form input |
 | `429` | Rate limit exceeded | Back off; never retry in a tight loop |
 | `500+` | Temporary server failure | Preserve safe local UI state and offer a controlled retry |
 
@@ -503,7 +506,9 @@ It is also the current source for active `failure_reasons`.
 POST /api/driver/deliveries/{delivery}/start
 ```
 
-No body is required.
+In Firebase mode, send a current GPS fix using the same safe GPS fields described
+below. `latitude`, `longitude`, and `recorded_at` are required. Redis rollback
+mode continues to accept an empty body for older clients.
 
 Success changes the status to `on_the_way`, sets `started_at`, and creates
 exactly one active tracking session inside a database transaction.
@@ -523,7 +528,21 @@ The real `data` value is the full driver-delivery resource. Flutter must start
 foreground GPS only after receiving this successful response. A repeated or
 invalid start returns `409`; refetch instead of blindly retrying.
 
-## 9. GPS location ingestion
+## 9. GPS location transport
+
+New Firebase-enabled mobile builds obtain a credential after start:
+
+```http
+POST /api/driver/deliveries/{delivery}/tracking-credentials
+```
+
+The response contains a Firebase custom token, opaque delivery/session aliases,
+an exact database path, and an expiry. Keep it in memory, refresh it before
+expiry, and never persist or log it. Append each sample under the returned
+history session, then transactionally advance `live` only when its
+`recorded_at_ms`/`sequence` ordering is newer.
+
+The following endpoint remains available for old builds and rollback:
 
 ```http
 POST /api/driver/deliveries/{delivery}/locations
@@ -586,13 +605,14 @@ Rules enforced by Laravel:
 - session, assigned delivery, business, and authenticated driver must match;
 - `recorded_at` cannot predate the active session;
 - GPS is rejected before start and after delivery, failure, or cancellation;
-- delayed older points remain in MySQL but do not replace newer Redis state;
-- equal timestamps use the greater persisted location ID;
-- only a point accepted as latest Redis state is broadcast;
-- Redis/Reverb failure never rolls back committed MySQL history.
+- delayed older points remain in Firebase history but do not replace live state;
+- equal timestamps use a monotonically greater sequence tie-break;
+- Firebase rule or live-write failure cannot create a MySQL intermediate row;
+- MySQL stores only the new session's start/end points in Firebase mode.
 
-The rate limit is 12 requests per minute per driver/delivery, matching one
-sample approximately every five seconds. On `429`, pause and back off. Do not
+The legacy Laravel endpoint rate limit is 12 requests per minute per
+driver/delivery, matching one sample approximately every five seconds. On
+`429`, pause and back off. Do not
 increase submission frequency. There is no altitude field.
 
 ## 10. Mark delivered
@@ -631,10 +651,11 @@ Payment behavior:
 - prepaid, `none`, or zero-expected deliveries are `not_required` and cannot be
   converted into cash by the driver.
 
-On success, Laravel atomically marks the delivery `delivered`, records proof
-and payment, closes the tracking session, removes Redis live state after the
-transaction, and broadcasts terminal state. Flutter must immediately stop GPS
-and clear active-tracking UI.
+On success, Laravel atomically marks the delivery `delivered`, records proof and
+payment, closes the tracking session, and keeps a start/end MySQL audit pair.
+Firebase writes and live state are revoked before terminal commit; safe terminal
+status publication is retried through a MySQL outbox if Firebase is unavailable.
+Flutter must immediately stop GPS and clear active-tracking UI.
 
 ## 11. Mark failed
 
@@ -662,14 +683,14 @@ failed_latitude=-6.7924
 failed_longitude=39.2083
 ```
 
-On success, Laravel atomically marks the delivery `failed`, records the
-failure, closes the tracking session, removes Redis live state, and broadcasts
+On success, Laravel atomically marks the delivery `failed`, records the failure,
+revokes Firebase tracking, closes the tracking session, and publishes the safe
 terminal state. Flutter must stop GPS immediately.
 
 ## 12. Authorized tracking history
 
 ```http
-GET /api/deliveries/{delivery}/tracking-locations?per_page=50
+GET /api/deliveries/{delivery}/tracking-locations?per_page=50&cursor=...
 ```
 
 `per_page` is optional, from 1 through 100, and defaults to 50. Results are
@@ -712,7 +733,7 @@ use the latest MySQL history point to claim that the driver is currently live.
 | Delivery details | `GET /api/driver/deliveries/{delivery}` |
 | Pickup information | Read `pickup` from the assigned-delivery response; do not submit replacement branch coordinates |
 | Start action | `POST .../{delivery}/start` |
-| Foreground tracking | `POST .../{delivery}/locations` every ~5 seconds |
+| Foreground tracking | Direct scoped Firebase history/live writes every ~5 seconds; legacy builds use `POST .../{delivery}/locations` |
 | Delivery completion form | `POST .../{delivery}/deliver` |
 | Failure form | Detail failure reasons, then `POST .../{delivery}/fail` |
 | Logout | `POST /api/auth/logout` |
@@ -727,7 +748,7 @@ Recommended API-client behavior:
 5. Convert backend field errors into form-field messages.
 6. Clear secure authentication and stop GPS on `401`.
 7. Refetch delivery state after transition timeouts or `409`.
-8. Never log full requests for login, PIN, proof, location, or bearer tokens.
+8. Never log full requests for login, proof, location, Firebase credentials, or bearer tokens.
 
 ## 14. Current API gaps—do not invent client behavior
 

@@ -126,6 +126,11 @@ function normalizeLocation(payload, requiresUpdateTimestamp) {
 }
 
 export function validateSnapshot(payload) {
+    const transport = isPlainObject(payload?.transport) ? payload.transport : {
+        name: 'reverb',
+        credentials_url: null,
+    };
+
     if (!isPlainObject(payload)
         || !isPlainObject(payload.delivery)
         || !isPlainObject(payload.channel)
@@ -138,6 +143,10 @@ export function validateSnapshot(payload) {
         || !/^delivery-tracking\.[a-f0-9]{64}$/.test(payload.channel.name)
         || payload.channel.event !== 'delivery.location.updated'
         || payload.channel.status_event !== 'delivery.tracking.status.updated'
+        || !['reverb', 'firebase', 'snapshot'].includes(transport.name)
+        || (transport.name === 'firebase'
+            && (typeof transport.credentials_url !== 'string'
+                || !/^\/tracking\/firebase-credentials$/.test(transport.credentials_url)))
     ) {
         return null;
     }
@@ -165,6 +174,10 @@ export function validateSnapshot(payload) {
         channelName: payload.channel.name,
         locationEvent: payload.channel.event,
         statusEvent: payload.channel.status_event,
+        transportName: transport.name,
+        firebaseCredentialsUrl: transport.name === 'firebase'
+            ? transport.credentials_url
+            : null,
     };
 }
 

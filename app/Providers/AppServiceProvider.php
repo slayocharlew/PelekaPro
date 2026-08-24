@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Contracts\FirebaseTrackingStore;
 use App\Services\CustomerDeliveryRequestSessionService;
 use App\Services\CustomerTrackingSessionService;
+use App\Services\FirebaseRealtimeTrackingStore;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -18,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(FirebaseTrackingStore::class, FirebaseRealtimeTrackingStore::class);
     }
 
     /**
@@ -59,6 +61,18 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(12)->by($userId.'|'.$deliveryId);
         });
+
+        RateLimiter::for('firebase-tracking-credentials', function (Request $request) {
+            $delivery = $request->route('delivery');
+            $deliveryId = $delivery instanceof Model ? $delivery->getKey() : $delivery;
+            $userId = $request->user()?->getAuthIdentifier() ?? $request->ip();
+
+            return Limit::perMinute(6)->by(hash('sha256', $userId.'|'.$deliveryId));
+        });
+
+        RateLimiter::for('customer-firebase-credentials', fn (Request $request) => Limit::perMinute(6)
+            ->by($this->customerTrackingRequestKey($request, 'firebase-credentials'))
+            ->response(fn () => $this->trackingRateLimitResponse()));
 
         RateLimiter::for('customer-tracking-entry', fn (Request $request) => Limit::perMinute(10)
             ->by(hash('sha256', 'customer-entry|'.$request->ip()))

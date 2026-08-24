@@ -23,4 +23,9 @@ Future controllers must enforce these rules:
 - GPS tracking must start only after the driver taps Start Delivery.
 - GPS tracking must stop when the delivery becomes `delivered`, `failed`, or `cancelled`.
 
-Redis should continue to hold only the latest live driver location. MySQL remains the permanent location history through `delivery_tracking_locations`.
+The selected live-tracking driver controls temporary location transport. Redis
+mode keeps permanent GPS history in MySQL and one temporary live point in Redis.
+Firebase mode keeps only authoritative start/end GPS evidence in MySQL and
+stores 30-day intermediate history plus the live point in Firebase Realtime
+Database. In both modes, MySQL delivery status and the active tracking session
+remain authoritative. See `docs/firebase-realtime-tracking.md`.

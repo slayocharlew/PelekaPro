@@ -22,6 +22,16 @@ function snapshot(overrides = {}) {
             tracking_active: true,
             live_location_available: true,
         },
+        route: {
+            origin: {
+                latitude: -6.7755,
+                longitude: 39.24,
+            },
+            destination: {
+                latitude: -6.7924,
+                longitude: 39.2083,
+            },
+        },
         live_location: {
             latitude: -6.7924,
             longitude: 39.2083,
@@ -82,6 +92,7 @@ test('valid active snapshot exposes only normalized customer state', () => {
         'trackingActive',
         'liveLocationAvailable',
         'location',
+        'routePlan',
         'channelName',
         'locationEvent',
         'statusEvent',
@@ -90,7 +101,33 @@ test('valid active snapshot exposes only normalized customer state', () => {
     ]);
     assert.equal(result.status, 'on_the_way');
     assert.equal(result.location.latitude, -6.7924);
+    assert.equal(result.routePlan.origin.latitude, -6.7755);
+    assert.equal(result.routePlan.destination.longitude, 39.2083);
     assert.equal(result.channelName, `delivery-tracking.${alias}`);
+});
+
+test('route endpoints accept null pins but reject malformed or extra coordinate data', () => {
+    const missingOrigin = validateSnapshot(snapshot({
+        route: {
+            origin: null,
+            destination: snapshot().route.destination,
+        },
+    }));
+
+    assert.equal(missingOrigin.routePlan.origin, null);
+    assert.equal(missingOrigin.routePlan.destination.latitude, -6.7924);
+    assert.equal(validateSnapshot(snapshot({
+        route: {
+            origin: { latitude: 91, longitude: 39.24 },
+            destination: snapshot().route.destination,
+        },
+    })), null);
+    assert.equal(validateSnapshot(snapshot({
+        route: {
+            origin: { ...snapshot().route.origin, address: 'not allowed' },
+            destination: snapshot().route.destination,
+        },
+    })), null);
 });
 
 test('Firebase snapshots accept only the fixed same-origin credential endpoint', () => {
@@ -236,6 +273,7 @@ test('terminal event immediately ends tracking and clears marker state', () => {
     assert.equal(result.state.trackingActive, false);
     assert.equal(result.state.liveLocationAvailable, false);
     assert.equal(result.state.location, null);
+    assert.deepEqual(result.state.routePlan, active.routePlan);
 });
 
 test('terminal event rejects invalid status and another tracking code', () => {

@@ -5,6 +5,7 @@ import {
     interpolatePosition,
     shouldAnimateMarker,
 } from '../../resources/js/tracking/map-math.js';
+import { routePlanSignature } from '../../resources/js/tracking/map-adapter.js';
 
 const darEsSalaam = { latitude: -6.7924, longitude: 39.2083 };
 
@@ -33,4 +34,37 @@ test('implausibly large jumps are not animated', () => {
 
 test('identical points do not start duplicate marker animations', () => {
     assert.equal(shouldAnimateMarker(darEsSalaam, darEsSalaam, false), false);
+});
+
+test('the same pickup and destination reuse one road-route computation signature', () => {
+    const routePlan = {
+        origin: { latitude: -6.7755, longitude: 39.24 },
+        destination: { latitude: -6.7924, longitude: 39.2083 },
+    };
+
+    assert.equal(
+        routePlanSignature(routePlan),
+        routePlanSignature(structuredClone(routePlan))
+    );
+    assert.notEqual(
+        routePlanSignature(routePlan),
+        routePlanSignature({
+            ...routePlan,
+            destination: { latitude: -6.81, longitude: 39.19 },
+        })
+    );
+});
+
+test('customer map computes one driving route and keeps Firebase points out of route planning', async () => {
+    const source = await import('node:fs/promises').then(({ readFile }) => readFile(
+        new URL('../../resources/js/tracking/map-adapter.js', import.meta.url),
+        'utf8'
+    ));
+
+    assert.match(source, /this\.Route\.computeRoutes\(\{/);
+    assert.match(source, /travelMode: 'DRIVING'/);
+    assert.match(source, /fields: \['path'\]/);
+    assert.match(source, /signature === this\.routeSignature/);
+    assert.match(source, /strokeColor: '#ff6c37'/);
+    assert.equal(source.includes('recorded_at'), false);
 });

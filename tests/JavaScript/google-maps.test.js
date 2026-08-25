@@ -23,7 +23,7 @@ test('Google coordinate helpers accept valid values and reject malformed coordin
     assert.equal(coordinateFromGoogle({ lat: 'invalid', lng: 39.2 }), null);
 });
 
-test('Google loader is singleton, requires both public settings, and loads no paid add-on libraries', async () => {
+test('Google loader is singleton, requires public settings, and loads only map route libraries', async () => {
     const source = await readFile(
         new URL('../../resources/js/maps/google-maps-loader.js', import.meta.url),
         'utf8'
@@ -35,8 +35,9 @@ test('Google loader is singleton, requires both public settings, and loads no pa
     assert.match(source, /language: 'en'/);
     assert.match(source, /region: 'TZ'/);
     assert.match(source, /map_ids: mapId/);
+    assert.equal(source.includes("importLibrary('routes')"), true);
+    assert.equal(source.includes("importLibrary('core')"), true);
     assert.equal(source.includes("importLibrary('places')"), false);
-    assert.equal(source.includes("importLibrary('routes')"), false);
     assert.equal(source.includes('localStorage'), false);
     assert.equal(source.includes('sessionStorage'), false);
 });

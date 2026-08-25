@@ -30,6 +30,8 @@ class CustomerTrackingPageTest extends TestCase
             ->assertViewIs('tracking.show')
             ->assertSee('data-customer-tracking', false)
             ->assertSee('PelekaPro')
+            ->assertSee('tracking-route-notice')
+            ->assertSee('<meta name="theme-color" content="#ff6c37">', false)
             ->assertSee('/tracking/session', false)
             ->assertHeader('Cache-Control', 'no-store, private')
             ->assertHeader('Pragma', 'no-cache')
@@ -103,6 +105,8 @@ class CustomerTrackingPageTest extends TestCase
         $this->assertIsString($manifest);
         $this->assertIsString($serviceWorker);
         $this->assertJson($manifest);
+        $this->assertStringContainsString('"background_color": "#f5f5f5"', $manifest);
+        $this->assertStringContainsString('"theme_color": "#ff6c37"', $manifest);
         $this->assertStringNotContainsString('public_tracking_token', $manifest);
         $this->assertStringNotContainsString('delivery-tracking.', $manifest);
         $this->assertStringContainsString("cache: 'no-store'", $serviceWorker);

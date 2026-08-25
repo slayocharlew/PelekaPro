@@ -99,6 +99,8 @@ trait CreatesCustomerTrackingFixtures
             'pickup_name' => 'Main Shop',
             'pickup_phone' => '255700000001',
             'pickup_address' => 'Mikocheni',
+            'pickup_latitude' => -6.7755000,
+            'pickup_longitude' => 39.2400000,
             'dropoff_name' => $customer->name,
             'dropoff_phone' => $customer->phone,
             'dropoff_address' => 'Test address',

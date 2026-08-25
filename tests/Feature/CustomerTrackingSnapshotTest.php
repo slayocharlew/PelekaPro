@@ -56,6 +56,16 @@ class CustomerTrackingSnapshotTest extends TestCase
                     'tracking_active' => true,
                     'live_location_available' => true,
                 ],
+                'route' => [
+                    'origin' => [
+                        'latitude' => (float) $delivery->pickup_latitude,
+                        'longitude' => (float) $delivery->pickup_longitude,
+                    ],
+                    'destination' => [
+                        'latitude' => (float) $delivery->dropoff_latitude,
+                        'longitude' => (float) $delivery->dropoff_longitude,
+                    ],
+                ],
                 'live_location' => [
                     'latitude' => (float) $location->latitude,
                     'longitude' => (float) $location->longitude,
@@ -95,6 +105,43 @@ class CustomerTrackingSnapshotTest extends TestCase
         ] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $encoded);
         }
+    }
+
+    public function test_route_snapshot_exposes_only_customer_safe_pickup_and_destination_coordinates(): void
+    {
+        $business = $this->customerTrackingBusiness();
+        $delivery = $this->customerTrackingDelivery($business);
+
+        $response = $this->snapshot($delivery)
+            ->assertOk()
+            ->assertJsonPath('route.origin.latitude', (float) $delivery->pickup_latitude)
+            ->assertJsonPath('route.origin.longitude', (float) $delivery->pickup_longitude)
+            ->assertJsonPath('route.destination.latitude', (float) $delivery->dropoff_latitude)
+            ->assertJsonPath('route.destination.longitude', (float) $delivery->dropoff_longitude);
+
+        $encodedRoute = json_encode($response->json('route'));
+        $this->assertStringNotContainsString('address', $encodedRoute);
+        $this->assertStringNotContainsString('name', $encodedRoute);
+        $this->assertStringNotContainsString('phone', $encodedRoute);
+        $this->assertStringNotContainsString('business_id', $encodedRoute);
+        $this->assertStringNotContainsString('delivery_id', $encodedRoute);
+    }
+
+    public function test_missing_pickup_pin_does_not_invent_a_route_origin(): void
+    {
+        $business = $this->customerTrackingBusiness();
+        $delivery = $this->customerTrackingDelivery($business);
+        $delivery->forceFill([
+            'pickup_latitude' => null,
+            'pickup_longitude' => null,
+        ])->save();
+
+        $this->snapshot($delivery)
+            ->assertOk()
+            ->assertJsonPath('route.origin', null)
+            ->assertJsonPath('route.destination.latitude', (float) $delivery->dropoff_latitude)
+            ->assertJsonPath('delivery.tracking_active', false)
+            ->assertJsonPath('live_location', null);
     }
 
     public function test_active_delivery_without_current_redis_state_remains_active_but_has_no_live_location(): void

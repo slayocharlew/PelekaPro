@@ -89,14 +89,18 @@ export async function loadGoogleMaps() {
 }
 
 async function importLibraries() {
-    const [{ Map }, { AdvancedMarkerElement }] = await Promise.all([
+    const [{ Map }, { AdvancedMarkerElement }, { LatLngBounds }, { Route }] = await Promise.all([
         window.google.maps.importLibrary('maps'),
         window.google.maps.importLibrary('marker'),
+        window.google.maps.importLibrary('core'),
+        window.google.maps.importLibrary('routes'),
     ]);
 
     return {
         Map,
         AdvancedMarkerElement,
+        LatLngBounds,
+        Route,
         mapId: googleMapsConfiguration().mapId,
     };
 }

@@ -125,6 +125,29 @@ function normalizeLocation(payload, requiresUpdateTimestamp) {
     };
 }
 
+function normalizeRouteEndpoint(payload) {
+    if (payload === null) {
+        return null;
+    }
+
+    if (!isPlainObject(payload)
+        || !finiteNumber(payload.latitude)
+        || payload.latitude < -90
+        || payload.latitude > 90
+        || !finiteNumber(payload.longitude)
+        || payload.longitude < -180
+        || payload.longitude > 180
+        || Object.keys(payload).some((key) => !['latitude', 'longitude'].includes(key))
+    ) {
+        return undefined;
+    }
+
+    return {
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+    };
+}
+
 export function validateSnapshot(payload) {
     const transport = isPlainObject(payload?.transport) ? payload.transport : {
         name: 'reverb',
@@ -133,6 +156,7 @@ export function validateSnapshot(payload) {
 
     if (!isPlainObject(payload)
         || !isPlainObject(payload.delivery)
+        || !isPlainObject(payload.route)
         || !isPlainObject(payload.channel)
         || typeof payload.delivery.tracking_code !== 'string'
         || !/^[A-Za-z0-9-]{1,64}$/.test(payload.delivery.tracking_code)
@@ -148,6 +172,13 @@ export function validateSnapshot(payload) {
             && (typeof transport.credentials_url !== 'string'
                 || !/^\/tracking\/firebase-credentials$/.test(transport.credentials_url)))
     ) {
+        return null;
+    }
+
+    const origin = normalizeRouteEndpoint(payload.route.origin);
+    const destination = normalizeRouteEndpoint(payload.route.destination);
+
+    if (origin === undefined || destination === undefined) {
         return null;
     }
 
@@ -171,6 +202,7 @@ export function validateSnapshot(payload) {
         trackingActive: payload.delivery.tracking_active,
         liveLocationAvailable: payload.delivery.live_location_available,
         location,
+        routePlan: { origin, destination },
         channelName: payload.channel.name,
         locationEvent: payload.channel.event,
         statusEvent: payload.channel.status_event,
@@ -211,6 +243,7 @@ export function createInitialState() {
         trackingActive: false,
         liveLocationAvailable: false,
         location: null,
+        routePlan: { origin: null, destination: null },
         channelName: null,
         locationEvent: null,
         statusEvent: null,

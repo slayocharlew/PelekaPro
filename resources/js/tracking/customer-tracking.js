@@ -93,6 +93,7 @@ class CustomerTrackingPage {
             mapPlaceholder: byId('tracking-map-placeholder'),
             mapMessageTitle: byId('tracking-map-message-title'),
             mapMessage: byId('tracking-map-message'),
+            routeNotice: byId('tracking-route-notice'),
             endButton: byId('end-tracking-session'),
             ended: byId('tracking-ended'),
             endedTitle: byId('tracking-ended-title'),
@@ -441,7 +442,45 @@ class CustomerTrackingPage {
         this.elements.content.hidden = false;
         this.elements.code.textContent = this.state.trackingCode ?? '—';
         this.renderStatus();
+        this.renderRoute();
         this.renderLocation();
+    }
+
+    async renderRoute() {
+        const routePlan = this.state.routePlan;
+        const hasEndpoint = routePlan.origin !== null || routePlan.destination !== null;
+
+        if (!hasEndpoint) {
+            this.map.hideRoute();
+            this.elements.routeNotice.hidden = true;
+
+            return;
+        }
+
+        const mapAvailable = await this.map.initialize();
+
+        if (!mapAvailable || this.ended || this.state.routePlan !== routePlan) {
+            return;
+        }
+
+        const routeResult = await this.map.showRoute(routePlan);
+
+        if (this.ended || this.state.routePlan !== routePlan || !routeResult.visible) {
+            return;
+        }
+
+        this.elements.mapPlaceholder.hidden = true;
+        this.elements.routeNotice.hidden = false;
+
+        if (routePlan.origin && routePlan.destination) {
+            this.elements.routeNotice.textContent = routeResult.roadRoute
+                ? 'Pickup → Customer destination'
+                : 'Pickup and destination are shown. The road route is temporarily unavailable.';
+        } else if (routePlan.destination) {
+            this.elements.routeNotice.textContent = 'Customer destination shown. Pickup pin is unavailable.';
+        } else {
+            this.elements.routeNotice.textContent = 'Pickup point shown. Customer destination pin is unavailable.';
+        }
     }
 
     renderStatus() {
@@ -468,6 +507,12 @@ class CustomerTrackingPage {
             this.map.hideLocation();
             this.elements.liveBadge.hidden = true;
             this.clearLocationDetails();
+
+            if (this.map.hasRouteContext()) {
+                this.elements.mapPlaceholder.hidden = true;
+
+                return;
+            }
 
             if (this.state.ended || TERMINAL_STATUSES.includes(this.state.status)) {
                 this.showMapMessage('Tracking ended', 'Live location is no longer available for this delivery.');

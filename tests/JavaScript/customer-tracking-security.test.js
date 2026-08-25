@@ -95,8 +95,8 @@ test('Google Maps uses a restricted browser configuration without tracking crede
     assert.equal(loaderSource.includes("auth_referrer_policy: 'origin'"), true);
     assert.equal(loaderSource.includes("importLibrary('maps')"), true);
     assert.equal(loaderSource.includes("importLibrary('marker')"), true);
+    assert.equal(loaderSource.includes("importLibrary('routes')"), true);
     assert.equal(loaderSource.includes("importLibrary('places')"), false);
-    assert.equal(loaderSource.includes("importLibrary('routes')"), false);
     assert.equal(packageConfiguration.dependencies?.leaflet, undefined);
     assert.equal(frontendConfiguration.includes('VITE_GOOGLE_MAPS_API_KEY'), true);
     assert.equal(frontendConfiguration.includes('VITE_GOOGLE_MAPS_MAP_ID'), true);
@@ -105,7 +105,7 @@ test('Google Maps uses a restricted browser configuration without tracking crede
     assert.equal(frontendConfiguration.includes('openstreetmap.org'), false);
 });
 
-test('customer map loads lazily for a fresh location and reuses one map instance', async () => {
+test('customer map loads for secure route context or a fresh location and reuses one map instance', async () => {
     const [pageSource, mapSource] = await Promise.all([
         '../../resources/js/tracking/customer-tracking.js',
         '../../resources/js/tracking/map-adapter.js',
@@ -115,6 +115,8 @@ test('customer map loads lazily for a fresh location and reuses one map instance
     assert.equal(pageSource.includes('this.mapReady = this.map.initialize()'), false);
     assert.match(mapSource, /if \(this\.map\) \{\s+return true;/);
     assert.match(mapSource, /if \(!this\.initialization\)/);
+    assert.match(mapSource, /signature === this\.routeSignature/);
+    assert.match(mapSource, /this\.Route\.computeRoutes/);
     assert.match(mapSource, /this\.marker\.position = googlePosition/);
     assert.equal(mapSource.includes('new window.google.maps.Marker'), false);
 });

@@ -28,6 +28,10 @@ final class CustomerTrackingSnapshotService
      *         tracking_active: bool,
      *         live_location_available: bool
      *     },
+     *     route: array{
+     *         origin: array{latitude: float, longitude: float}|null,
+     *         destination: array{latitude: float, longitude: float}|null
+     *     },
      *     live_location: array{
      *         latitude: float,
      *         longitude: float,
@@ -60,6 +64,16 @@ final class CustomerTrackingSnapshotService
                 'tracking_active' => $trackingActive,
                 'live_location_available' => $liveLocation !== null,
             ],
+            'route' => [
+                'origin' => $this->coordinatePair(
+                    $delivery->pickup_latitude,
+                    $delivery->pickup_longitude,
+                ),
+                'destination' => $this->coordinatePair(
+                    $delivery->dropoff_latitude,
+                    $delivery->dropoff_longitude,
+                ),
+            ],
             'live_location' => $liveLocation,
             'channel' => [
                 'name' => "delivery-tracking.{$principal->channelAlias}",
@@ -74,6 +88,28 @@ final class CustomerTrackingSnapshotService
                     ? route('customer.tracking.firebase-credentials', absolute: false)
                     : null,
             ],
+        ];
+    }
+
+    /**
+     * @return array{latitude: float, longitude: float}|null
+     */
+    private function coordinatePair(mixed $latitude, mixed $longitude): ?array
+    {
+        if (! is_numeric($latitude) || ! is_numeric($longitude)) {
+            return null;
+        }
+
+        $latitude = (float) $latitude;
+        $longitude = (float) $longitude;
+
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return null;
+        }
+
+        return [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
         ];
     }
 

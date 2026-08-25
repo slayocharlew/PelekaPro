@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <meta name="theme-color" content="#075e54">
+        <meta name="theme-color" content="#ff6c37">
         <meta name="color-scheme" content="light">
         <meta name="robots" content="noindex, nofollow, noarchive">
         <meta name="referrer" content="no-referrer">
@@ -109,8 +109,8 @@
                         <section class="tracking-map-card" aria-labelledby="map-heading">
                             <div class="tracking-map-card__header">
                                 <div>
-                                    <p class="tracking-map-card__eyebrow">Live position</p>
-                                    <h2 id="map-heading">Delivery map</h2>
+                                    <p class="tracking-map-card__eyebrow">Delivery journey</p>
+                                    <h2 id="map-heading">Route and live rider</h2>
                                 </div>
                                 <span id="tracking-live-badge" class="live-badge" hidden>
                                     <span aria-hidden="true"></span>
@@ -123,7 +123,7 @@
                                     id="tracking-map"
                                     class="tracking-map"
                                     role="application"
-                                    aria-label="Live delivery location map"
+                                    aria-label="Delivery route from pickup to destination and live rider position"
                                 ></div>
                                 <div id="tracking-map-placeholder" class="tracking-map-placeholder">
                                     <div class="tracking-map-placeholder__icon" aria-hidden="true">
@@ -138,6 +138,7 @@
                                         Your delivery has not started moving yet.
                                     </p>
                                 </div>
+                                <div id="tracking-route-notice" class="tracking-route-notice" role="status" aria-live="polite" hidden></div>
                             </div>
 
                             <div class="tracking-map-footer">

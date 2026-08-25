@@ -1101,21 +1101,21 @@
 }
 
 :root {
-    --tracking-ink: #13231f;
-    --tracking-muted: #63756f;
-    --tracking-border: #dce8e3;
+    --tracking-ink: #2f211c;
+    --tracking-muted: #75665f;
+    --tracking-border: #eadbd4;
     --tracking-surface: #ffffff;
-    --tracking-background: #f3f7f5;
-    --tracking-green: #075e54;
-    --tracking-green-bright: #10b981;
-    --tracking-green-soft: #e4f7ef;
-    --tracking-orange: #e36b2c;
-    --tracking-orange-soft: #fff1e8;
+    --tracking-background: #f5f5f5;
+    --tracking-primary: #ff6c37;
+    --tracking-primary-bright: #ff6c37;
+    --tracking-primary-soft: #fff0e9;
+    --tracking-orange: #ff6c37;
+    --tracking-orange-soft: #fff0e9;
     --tracking-red: #b33a3a;
     --tracking-red-soft: #fceaea;
     --tracking-blue: #2563a6;
     --tracking-blue-soft: #eaf2fb;
-    --tracking-shadow: 0 18px 60px rgb(22 54 43 / 10%);
+    --tracking-shadow: 0 18px 60px rgb(70 40 28 / 10%);
 }
 
 .sr-only {
@@ -1135,8 +1135,8 @@
     margin: 0;
     color: var(--tracking-ink);
     background:
-        radial-gradient(circle at 8% 0%, rgb(16 185 129 / 10%), transparent 28rem),
-        radial-gradient(circle at 100% 35%, rgb(227 107 44 / 8%), transparent 30rem),
+        radial-gradient(circle at 8% 0%, rgb(255 108 55 / 13%), transparent 28rem),
+        radial-gradient(circle at 100% 35%, rgb(255 108 55 / 7%), transparent 30rem),
         var(--tracking-background);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -1156,7 +1156,7 @@
 .tracking-header {
     position: relative;
     z-index: 10;
-    border-bottom: 1px solid rgb(220 232 227 / 85%);
+    border-bottom: 1px solid rgb(234 219 212 / 85%);
     background: rgb(255 255 255 / 88%);
     backdrop-filter: blur(18px);
 }
@@ -1182,9 +1182,9 @@
     place-items: center;
     overflow: hidden;
     border-radius: 13px;
-    color: var(--tracking-green-bright);
-    background: var(--tracking-green);
-    box-shadow: 0 8px 22px rgb(7 94 84 / 22%);
+    color: #fff;
+    background: var(--tracking-primary);
+    box-shadow: 0 8px 22px rgb(255 108 55 / 25%);
 }
 
 .tracking-brand__mark svg {
@@ -1242,14 +1242,14 @@
 }
 
 .connection-pill--live {
-    color: #086142;
-    border-color: #bdebd8;
-    background: #effcf6;
+    color: #9b3513;
+    border-color: #ffd0bd;
+    background: #fff7f3;
 }
 
 .connection-pill--live .connection-pill__dot {
-    background: var(--tracking-green-bright);
-    box-shadow: 0 0 0 4px rgb(16 185 129 / 13%);
+    background: var(--tracking-primary-bright);
+    box-shadow: 0 0 0 4px rgb(255 108 55 / 14%);
 }
 
 .connection-pill--offline,
@@ -1305,8 +1305,8 @@
 .tracking-spinner {
     width: 34px;
     height: 34px;
-    border: 3px solid #cfe2da;
-    border-top-color: var(--tracking-green);
+    border: 3px solid #f1ddd4;
+    border-top-color: var(--tracking-primary);
     border-radius: 50%;
     animation: tracking-spin 0.8s linear infinite;
 }
@@ -1325,7 +1325,7 @@
 
 .tracking-summary,
 .tracking-map-card {
-    border: 1px solid rgb(220 232 227 / 95%);
+    border: 1px solid rgb(234 219 212 / 95%);
     border-radius: 24px;
     background: var(--tracking-surface);
     box-shadow: var(--tracking-shadow);
@@ -1358,7 +1358,7 @@
     border: 1px solid var(--tracking-border);
     border-radius: 18px;
     padding: 1rem;
-    background: #fbfdfc;
+    background: #fffcfa;
 }
 
 .tracking-status-card p {
@@ -1390,8 +1390,8 @@
 .status-chip--active,
 .status-chip--arrived,
 .status-chip--delivered {
-    color: #076447;
-    background: var(--tracking-green-soft);
+    color: #9b3513;
+    background: var(--tracking-primary-soft);
 }
 
 .status-chip--failed,
@@ -1453,10 +1453,10 @@
     justify-content: center;
     gap: 0.55rem;
     margin-top: 1.5rem;
-    border: 1px solid #cadbd4;
+    border: 1px solid #e6d6cf;
     border-radius: 14px;
-    color: #314d43;
-    background: #f8fbfa;
+    color: #4e3d36;
+    background: #fffdfc;
     font-size: 0.88rem;
     font-weight: 700;
     cursor: pointer;
@@ -1464,8 +1464,8 @@
 }
 
 .tracking-end-button:hover {
-    border-color: #9bbcaf;
-    background: #eff7f4;
+    border-color: #ffb89d;
+    background: var(--tracking-orange-soft);
 }
 
 .tracking-end-button:active {
@@ -1473,7 +1473,7 @@
 }
 
 .tracking-end-button:focus-visible {
-    outline: 3px solid rgb(16 185 129 / 30%);
+    outline: 3px solid rgb(255 108 55 / 30%);
     outline-offset: 2px;
 }
 
@@ -1522,8 +1522,8 @@
     gap: 0.45rem;
     border-radius: 999px;
     padding: 0.42rem 0.65rem;
-    color: #076447;
-    background: var(--tracking-green-soft);
+    color: #9b3513;
+    background: var(--tracking-primary-soft);
     font-size: 0.72rem;
     font-weight: 750;
     letter-spacing: 0.04em;
@@ -1534,17 +1534,17 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--tracking-green-bright);
+    background: var(--tracking-primary-bright);
     animation: tracking-live-pulse 1.8s ease-out infinite;
 }
 
 @keyframes tracking-live-pulse {
     50% {
-        box-shadow: 0 0 0 7px rgb(16 185 129 / 0%);
+        box-shadow: 0 0 0 7px rgb(255 108 55 / 0%);
     }
 
     0% {
-        box-shadow: 0 0 0 0 rgb(16 185 129 / 28%);
+        box-shadow: 0 0 0 0 rgb(255 108 55 / 28%);
     }
 }
 
@@ -1553,9 +1553,9 @@
     min-height: clamp(360px, 58vh, 590px);
     overflow: hidden;
     background:
-        linear-gradient(90deg, rgb(7 94 84 / 5%) 1px, transparent 1px),
-        linear-gradient(rgb(7 94 84 / 5%) 1px, transparent 1px),
-        #eef5f2;
+        linear-gradient(90deg, rgb(255 108 55 / 5%) 1px, transparent 1px),
+        linear-gradient(rgb(255 108 55 / 5%) 1px, transparent 1px),
+        #f4efec;
     background-size: 32px 32px;
 }
 
@@ -1564,7 +1564,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    background: #e8f0ec;
+    background: #f1ece9;
 }
 
 .tracking-map-placeholder {
@@ -1577,7 +1577,7 @@
     flex-direction: column;
     padding: 2rem;
     color: var(--tracking-muted);
-    background: rgb(243 248 246 / 92%);
+    background: rgb(245 245 245 / 94%);
     text-align: center;
     transition: opacity 180ms ease, visibility 180ms ease;
 }
@@ -1592,11 +1592,33 @@
     height: 76px;
     place-items: center;
     margin-bottom: 1rem;
-    border: 1px solid #cde3da;
+    border: 1px solid #f0d8cd;
     border-radius: 24px;
-    color: var(--tracking-green);
+    color: var(--tracking-primary);
     background: #fff;
-    box-shadow: 0 12px 32px rgb(7 94 84 / 10%);
+    box-shadow: 0 12px 32px rgb(255 108 55 / 12%);
+}
+
+.tracking-route-notice {
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 3;
+    max-width: min(82%, 390px);
+    border: 1px solid rgb(255 255 255 / 72%);
+    border-radius: 999px;
+    padding: 0.58rem 0.85rem;
+    color: #442b21;
+    background: rgb(255 255 255 / 92%);
+    box-shadow: 0 8px 28px rgb(70 40 28 / 16%);
+    font-size: 0.73rem;
+    font-weight: 700;
+    line-height: 1.35;
+    backdrop-filter: blur(12px);
+}
+
+.tracking-route-notice[hidden] {
+    display: none;
 }
 
 .tracking-map-placeholder__icon svg {
@@ -1661,8 +1683,8 @@
     place-items: center;
     margin: 0 auto 1.1rem;
     border-radius: 22px;
-    color: var(--tracking-green);
-    background: var(--tracking-green-soft);
+    color: var(--tracking-primary);
+    background: var(--tracking-primary-soft);
 }
 
 .tracking-ended__icon svg,
@@ -1745,8 +1767,8 @@
     border: 3px solid white;
     border-radius: 50%;
     color: white;
-    background: var(--tracking-green);
-    box-shadow: 0 8px 24px rgb(7 94 84 / 35%);
+    background: var(--tracking-primary);
+    box-shadow: 0 8px 24px rgb(255 108 55 / 38%);
     transform: rotate(var(--tracking-heading, 0deg));
     transform-origin: 50% 50%;
 }
@@ -1757,7 +1779,7 @@
     width: 0;
     height: 0;
     border-right: 6px solid transparent;
-    border-bottom: 9px solid var(--tracking-green);
+    border-bottom: 9px solid var(--tracking-primary);
     border-left: 6px solid transparent;
     content: '';
 }
@@ -1765,6 +1787,26 @@
 .tracking-vehicle-marker svg {
     width: 25px;
     height: 25px;
+}
+
+.tracking-route-marker {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--tracking-orange);
+    box-shadow: 0 7px 20px rgb(70 40 28 / 25%);
+    font-size: 0.73rem;
+    font-weight: 800;
+}
+
+.tracking-route-marker--destination {
+    border-color: var(--tracking-orange);
+    color: var(--tracking-orange);
+    background: #fff;
 }
 
 @media (min-width: 900px) {

@@ -80,7 +80,7 @@ beforeEach(async () => {
 
 after(async () => environment?.cleanup());
 
-test('driver can advance five-second live state without retaining every point in history', async () => {
+test('driver can advance the single five-second live state', async () => {
     const database = driverDatabase();
     const sample = point();
 
@@ -91,26 +91,22 @@ test('driver can advance five-second live state without retaining every point in
     )));
 });
 
-test('driver can retain a sampled history point independently of live state', async () => {
+test('driver cannot create Firebase location history', async () => {
     const database = driverDatabase();
     const sample = point();
 
-    await assertSucceeds(set(
+    await assertFails(set(
         ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
         sample,
     ));
 });
 
-test('driver cannot write another delivery or session', async () => {
+test('driver cannot write another delivery', async () => {
     const database = driverDatabase();
     const sample = point();
 
     await assertFails(set(
-        ref(database, `delivery_tracking/${otherDeliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
-        sample,
-    ));
-    await assertFails(set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/another_session/${sample.sample_id}`),
+        ref(database, `delivery_tracking/${otherDeliveryAlias}/live`),
         sample,
     ));
 });
@@ -147,7 +143,7 @@ test('revoked or expired control denies driver writes', async () => {
         await update(ref(context.database(), `delivery_tracking/${deliveryAlias}/control`), { active: false });
     });
     await assertFails(set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
+        ref(database, `delivery_tracking/${deliveryAlias}/live`),
         sample,
     ));
 
@@ -158,7 +154,7 @@ test('revoked or expired control denies driver writes', async () => {
         });
     });
     await assertFails(set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
+        ref(database, `delivery_tracking/${deliveryAlias}/live`),
         sample,
     ));
 });
@@ -171,7 +167,7 @@ test('driver cannot backdate a point before the authoritative session start', as
     });
 
     await assertFails(set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
+        ref(database, `delivery_tracking/${deliveryAlias}/live`),
         sample,
     ));
 });
@@ -181,7 +177,7 @@ test('driver cannot forge a future server-received timestamp', async () => {
     const sample = point({ received_at_ms: Date.now() + 60_000 });
 
     await assertFails(set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
+        ref(database, `delivery_tracking/${deliveryAlias}/live`),
         sample,
     ));
 });

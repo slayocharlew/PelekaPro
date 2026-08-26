@@ -158,7 +158,7 @@ All routes except login use both `auth:sanctum` and `active.api.user`.
 | `POST` | `/api/driver/deliveries/{delivery}/locations` | Legacy/rollback GPS submission | Validate authority and forward to the selected transport |
 | `POST` | `/api/driver/deliveries/{delivery}/deliver` | Submit delivery outcome, proof, and collection | Validate payment and atomically finish tracking |
 | `POST` | `/api/driver/deliveries/{delivery}/fail` | Submit an allowed failure reason and optional proof | Atomically record failure and finish tracking |
-| `GET` | `/api/deliveries/{delivery}/tracking-locations` | Optional authorized history/diagnostics | Return MySQL history in Redis mode or cursor-paginated Firebase history in Firebase mode |
+| `GET` | `/api/deliveries/{delivery}/tracking-locations` | Optional authorized diagnostics | Return business-authorized MySQL evidence; Firebase mode contains start/end points only |
 
 The Flutter driver application must not use delivery CRUD, available-driver,
 assignment, unassignment, or cancellation endpoints. Those are privileged
@@ -618,7 +618,7 @@ Rules enforced by Laravel:
 - session, assigned delivery, business, and authenticated driver must match;
 - `recorded_at` cannot predate the active session;
 - GPS is rejected before start and after delivery, failure, or cancellation;
-- delayed older points remain in Firebase history but do not replace live state;
+- delayed older points are rejected by Firebase ordering and do not replace live state;
 - equal timestamps use a monotonically greater sequence tie-break;
 - Firebase rule or live-write failure cannot create a MySQL intermediate row;
 - MySQL stores only the new session's start/end points in Firebase mode.
@@ -746,7 +746,7 @@ use the latest MySQL history point to claim that the driver is currently live.
 | Delivery details | `GET /api/driver/deliveries/{delivery}` |
 | Pickup information | Read `pickup` from the assigned-delivery response; do not submit replacement branch coordinates |
 | Start action | `POST .../{delivery}/start` |
-| Foreground tracking | Direct scoped Firebase history/live writes every ~5 seconds; legacy builds use `POST .../{delivery}/locations` |
+| Foreground tracking | Direct scoped overwrite of one Firebase `/live` child every ~5 seconds; legacy builds use `POST .../{delivery}/locations` |
 | Delivery completion form | `POST .../{delivery}/deliver` |
 | Failure form | Detail failure reasons, then `POST .../{delivery}/fail` |
 | Logout | `POST /api/auth/logout` |

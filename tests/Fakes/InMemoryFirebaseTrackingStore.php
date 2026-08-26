@@ -17,9 +17,6 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
     /** @var array<int, array<string, mixed>> */
     public array $live = [];
 
-    /** @var array<int, array<string, array<string, mixed>>> */
-    public array $history = [];
-
     /** @var array<int, string> */
     public array $terminalStatuses = [];
 
@@ -60,7 +57,7 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
         $this->publicStatuses[$delivery->id] = $this->statusPayload($delivery, true, $startPayload !== null);
 
         if ($startPayload !== null) {
-            $this->storePoint($delivery, $session, $startPayload, true);
+            $this->storePoint($delivery, $session, $startPayload);
         }
 
         return $control;
@@ -82,7 +79,7 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
 
     public function removeActivation(Delivery $delivery): void
     {
-        unset($this->controls[$delivery->id], $this->live[$delivery->id], $this->history[$delivery->id]);
+        unset($this->controls[$delivery->id], $this->live[$delivery->id]);
     }
 
     public function activeControl(Delivery $delivery, DeliveryTrackingSession $session, User $driver): array
@@ -116,14 +113,13 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
     ): array {
         $this->activeControl($delivery, $session, $driver);
 
-        return $this->storePoint($delivery, $session, $payload, true);
+        return $this->storePoint($delivery, $session, $payload);
     }
 
     private function storePoint(
         Delivery $delivery,
         DeliveryTrackingSession $session,
         array $payload,
-        bool $retainHistory,
     ): array {
         $recordedAt = Carbon::parse($payload['recorded_at'])->utc();
         $sampleId = hash('sha256', implode('|', [
@@ -146,11 +142,6 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
             'recorded_at_ms' => $recordedAt->getTimestampMs(),
             'received_at_ms' => now()->getTimestampMs(),
         ];
-        $created = $retainHistory && ! isset($this->history[$delivery->id][$sampleId]);
-
-        if ($created) {
-            $this->history[$delivery->id][$sampleId] = $point;
-        }
         $current = $this->live[$delivery->id] ?? null;
         $latestUpdated = ! is_array($current)
             || $point['recorded_at_ms'] > $current['recorded_at_ms']
@@ -161,7 +152,9 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
             $this->live[$delivery->id] = $point;
         }
 
-        return compact('point', 'created') + [
+        return [
+            'point' => $point,
+            'created' => $latestUpdated,
             'latest_updated' => $latestUpdated,
         ];
     }
@@ -251,19 +244,8 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
 
     public function historyPage(Delivery $delivery, int $perPage, ?string $cursor = null): array
     {
-        $points = array_values($this->history[$delivery->id] ?? []);
-        usort($points, fn (array $left, array $right): int => $left['recorded_at_ms'] <=> $right['recorded_at_ms']);
-
         return [
-            'data' => array_map(fn (array $point): array => [
-                'latitude' => $point['latitude'],
-                'longitude' => $point['longitude'],
-                'accuracy' => $point['accuracy'],
-                'speed' => $point['speed'],
-                'heading' => $point['heading'],
-                'battery_level' => $point['battery_level'],
-                'recorded_at' => $point['recorded_at'],
-            ], array_slice($points, 0, $perPage)),
+            'data' => [],
             'next_cursor' => null,
         ];
     }

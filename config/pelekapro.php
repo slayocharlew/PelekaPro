@@ -15,9 +15,6 @@ return [
         'root' => 'delivery_tracking',
         'credential_lifetime_minutes' => (int) env('PELEKAPRO_FIREBASE_CREDENTIAL_LIFETIME', 30),
         'history_retention_days' => (int) env('PELEKAPRO_FIREBASE_HISTORY_RETENTION_DAYS', 30),
-        'history_page_size' => (int) env('PELEKAPRO_FIREBASE_HISTORY_PAGE_SIZE', 50),
-        'history_sample_interval_seconds' => (int) env('PELEKAPRO_FIREBASE_HISTORY_SAMPLE_INTERVAL', 20),
-        'history_sample_distance_metres' => (int) env('PELEKAPRO_FIREBASE_HISTORY_SAMPLE_DISTANCE', 50),
     ],
     'customer_tracking' => [
         'cookie_name' => 'pelekapro_customer_tracking',

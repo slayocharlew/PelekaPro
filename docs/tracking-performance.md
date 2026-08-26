@@ -18,22 +18,15 @@ transport data. It does not poll merely to discover that the driver started.
 
 ## Write policy
 
-The driver may advance `/live` approximately every five seconds. Route-history
-evidence is sampled separately every 20 seconds by default, or sooner after a
-meaningful 50-metre movement. The start and end evidence continues to be stored
-in MySQL. A delayed point may be retained as history but cannot move `/live`
-backwards. The configured bounds enforce a 15–30 second history interval.
+The driver may advance one `/live` child approximately every five seconds. Each
+accepted point replaces the previous point; no intermediate Firebase history is
+created. Start and end evidence continues to be stored in MySQL. Delayed points
+cannot move `/live` backwards. Firebase rules enforce delivery/session
+ownership, active control, credential version, timestamps, sequence ordering,
+payload validation, and deny driver writes to `/history`.
 
-Flutter must apply these same settings locally before writing optional history:
-
-```env
-PELEKAPRO_FIREBASE_HISTORY_SAMPLE_INTERVAL=20
-PELEKAPRO_FIREBASE_HISTORY_SAMPLE_DISTANCE=50
-```
-
-Firebase rules deliberately allow a valid live write without a matching history
-write. They still enforce delivery/session ownership, active control, credential
-version, timestamps, sequence ordering, and payload validation.
+`/public_status` is also one fixed object. Laravel updates it only for delivery
+lifecycle state needed by customer tracking; it does not grow with GPS traffic.
 
 ## Redis separation
 
@@ -52,9 +45,10 @@ reads in the recommended environment.
 
 ## Pruning
 
-`firebase-tracking:prune-history` considers only sessions old enough to contain
-expired points, eager-loads each delivery in the same chunk, and deletes Firebase
-points in bounded batches. Production must continue running Laravel's scheduler.
+`firebase-tracking:prune-history` remains as a bounded cleanup path for history
+created by older app versions. New mobile and server location submissions do not
+create history children. Production must continue running Laravel's scheduler
+until legacy history has expired or been reviewed for removal.
 
 ## Safe local load test
 
@@ -68,7 +62,7 @@ npm run load:firebase
 ```
 
 The default simulates 100 concurrent deliveries, one customer per delivery, and
-12 five-second-equivalent live samples with history sampled every 20 seconds.
+12 five-second-equivalent overwrites of each delivery's single live child.
 Writes are issued in bounded batches of 25 by default so the emulator models
 independent devices without creating an unrealistic single-process burst. Set
 `PELEKAPRO_LOAD_CONCURRENCY` between 1 and 200 when sizing a staging run.

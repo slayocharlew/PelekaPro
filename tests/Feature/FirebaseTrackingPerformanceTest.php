@@ -14,7 +14,7 @@ class FirebaseTrackingPerformanceTest extends TestCase
     use CreatesCustomerTrackingFixtures;
     use RefreshDatabase;
 
-    public function test_tracking_workloads_use_separate_redis_connections_and_sampled_history_defaults(): void
+    public function test_tracking_workloads_use_separate_redis_connections_without_history_sampling(): void
     {
         $environment = file_get_contents(base_path('.env.example'));
 
@@ -27,8 +27,8 @@ class FirebaseTrackingPerformanceTest extends TestCase
         $this->assertStringContainsString('REDIS_SESSION_DB=3', $environment);
         $this->assertSame('2', (string) config('database.redis.live.database'));
         $this->assertSame('3', (string) config('database.redis.session.database'));
-        $this->assertSame(20, config('pelekapro.firebase_tracking.history_sample_interval_seconds'));
-        $this->assertSame(50, config('pelekapro.firebase_tracking.history_sample_distance_metres'));
+        $this->assertArrayNotHasKey('history_sample_interval_seconds', config('pelekapro.firebase_tracking'));
+        $this->assertArrayNotHasKey('history_sample_distance_metres', config('pelekapro.firebase_tracking'));
     }
 
     public function test_history_pruning_skips_recent_sessions_and_eager_loads_old_deliveries(): void

@@ -7,7 +7,7 @@ MySQL
 → authoritative delivery status, tracking-session lifecycle, and start/end GPS evidence
 
 Firebase Realtime Database
-→ sampled GPS history (30 days), customer-safe status, and the current live point
+→ one replaceable current live point and one customer-safe status object
 
 Redis + Reverb
 → retained as the rollback transport while PELEKAPRO_LIVE_TRACKING_DRIVER=redis
@@ -33,7 +33,6 @@ Firebase stores data under opaque HMAC aliases:
 ```text
 delivery_tracking/{deliveryAlias}/control
 delivery_tracking/{deliveryAlias}/live
-delivery_tracking/{deliveryAlias}/history/{sessionAlias}/{sampleId}
 delivery_tracking/{deliveryAlias}/public_status
 ```
 
@@ -88,10 +87,11 @@ npm run test:firebase-rules
 npx firebase deploy --only database
 ```
 
-The rules deny all access by default. Driver custom tokens can append only to
-their active delivery/session and can advance `live` only in timestamp/sequence
-order. Customer custom tokens are read-only and scoped to one opaque delivery
-alias. Control state and history are never customer-readable.
+The rules deny all access by default. Driver custom tokens can advance only the
+single `live` child for their active delivery/session and only in
+timestamp/sequence order. They cannot create Firebase history children.
+Customer custom tokens are read-only and scoped to one opaque delivery alias.
+Control state is never customer-readable.
 
 Customer credentials may be issued before the driver starts. In that state the
 customer may read only `public_status`; `live` remains empty and Firebase rules
@@ -114,10 +114,11 @@ delivery status, and exactly one active tracking session. The customer endpoint
 still requires the encrypted, HttpOnly customer tracking cookie. Tokens contain
 only scoped aliases, a role, an expiry, and revocation/version claims.
 
-## Retention and retry
+## Legacy cleanup and retry
 
-Intermediate Firebase history is retained for 30 days by default. Laravel
-schedules:
+New tracking sessions do not create Firebase location history. The legacy
+history pruning command remains temporarily available to delete history left by
+older application versions. Laravel schedules:
 
 ```text
 firebase-tracking:prune-history
@@ -129,10 +130,10 @@ same MySQL transaction as the terminal delivery state. A Firebase outage after
 commit therefore cannot undo delivery completion, and the safe terminal status
 is retried without restoring live writes.
 
-Live points and history have different write frequencies. `/live` may advance
-approximately every five seconds, while history is retained every 20 seconds by
-default or after a meaningful 50-metre movement. See
-`docs/tracking-performance.md` for configuration and emulator load testing.
+`/live` may advance approximately every five seconds, and every accepted point
+replaces the previous value. `public_status` is a fixed lifecycle object updated
+for waiting, active, and terminal states; it is not an append-only GPS log. See
+`docs/tracking-performance.md` for emulator load testing.
 
 ## Local verification
 

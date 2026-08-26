@@ -58,7 +58,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $this->assertSame(1, DeliveryTrackingLocation::query()
             ->where('delivery_id', $delivery->id)
             ->count());
-        $this->assertCount(2, $firebase->history[$delivery->id]);
+        $this->assertSame(-6.793, $firebase->live[$delivery->id]['latitude']);
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
@@ -204,7 +204,7 @@ class DriverLocationIngestionApiTest extends TestCase
         $this->assertSame(1, DeliveryTrackingLocation::query()
             ->where('delivery_id', $delivery->id)
             ->count());
-        $this->assertCount(2, $firebase->history[$delivery->id]);
+        $this->assertSame(-6.8, $firebase->live[$delivery->id]['latitude']);
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [

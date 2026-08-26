@@ -17,9 +17,7 @@ const deliveries = integer('PELEKAPRO_LOAD_DELIVERIES', 100, 1, 5_000);
 const viewersPerDelivery = integer('PELEKAPRO_LOAD_VIEWERS_PER_DELIVERY', 1, 1, 10);
 const samples = integer('PELEKAPRO_LOAD_SAMPLES', 12, 1, 120);
 const liveIntervalSeconds = integer('PELEKAPRO_LOAD_LIVE_INTERVAL_SECONDS', 5, 1, 60);
-const historyIntervalSeconds = integer('PELEKAPRO_LOAD_HISTORY_INTERVAL_SECONDS', 20, 15, 30);
 const concurrency = integer('PELEKAPRO_LOAD_CONCURRENCY', 25, 1, 200);
-const historyEvery = Math.max(1, Math.ceil(historyIntervalSeconds / liveIntervalSeconds));
 const projectId = 'demo-pelekapro-load';
 const root = 'delivery_tracking';
 const startedAtMs = Date.now() - 1_000;
@@ -145,7 +143,6 @@ try {
     for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
         await runInBatches(deliveries, async (index) => {
             const deliveryAlias = alias('delivery', index);
-            const sessionAlias = alias('session', index);
             const driver = driverDatabases[index];
             const recordedAtMs = startedAtMs + sampleIndex * liveIntervalSeconds * 1_000;
             const point = {
@@ -163,13 +160,6 @@ try {
             };
 
             await set(ref(driver, `${root}/${deliveryAlias}/live`), point);
-
-            if (sampleIndex % historyEvery === 0) {
-                await set(
-                    ref(driver, `${root}/${deliveryAlias}/history/${sessionAlias}/${point.sample_id}`),
-                    point,
-                );
-            }
         });
     }
 
@@ -177,14 +167,12 @@ try {
 
     const elapsedMs = Math.round(performance.now() - startedAt);
     const liveWrites = deliveries * samples;
-    const historyWrites = deliveries * Math.ceil(samples / historyEvery);
 
     console.log(JSON.stringify({
         deliveries,
         customer_viewers: deliveries * viewersPerDelivery,
         live_writes: liveWrites,
-        sampled_history_writes: historyWrites,
-        history_reduction_percent: Math.round((1 - historyWrites / liveWrites) * 100),
+        firebase_history_writes: 0,
         max_concurrent_operations: concurrency,
         observed_live_events: liveEvents,
         observed_status_events: statusEvents,

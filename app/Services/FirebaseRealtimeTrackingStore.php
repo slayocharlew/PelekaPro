@@ -60,9 +60,7 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             $recordedAt = Carbon::parse($startPayload['recorded_at'])->utc();
             $sampleId = $this->serverSampleId($delivery, $session, $startPayload, $recordedAt);
             $point = $this->pointPayload($startPayload, $sampleId, $recordedAt);
-            $sessionAlias = $this->aliases->session($delivery, $session);
             $updates['live'] = $point;
-            $updates["history/{$sessionAlias}/{$sampleId}"] = $point;
             $updates['public_status'] = $this->statusPayload($delivery, true, true, $session->started_at);
         }
 
@@ -151,25 +149,9 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
         $sampleId = $this->serverSampleId($delivery, $session, $payload, $recordedAt);
         $point = $this->pointPayload($payload, $sampleId, $recordedAt);
         $deliveryReference = $this->deliveryReference($delivery);
-        $sessionHistoryReference = $deliveryReference
-            ->getChild('history')
-            ->getChild($this->aliases->session($delivery, $session));
-        $created = $this->shouldRetainHistoryPoint($sessionHistoryReference, $point);
-
-        if ($created) {
-            $sessionHistoryReference->getChild($sampleId)->set($point);
-        }
-
         $latestUpdated = $this->advanceLatest($deliveryReference->getChild('live'), $point);
 
-        if ($latestUpdated) {
-            $deliveryReference->getChild('public_status')->update([
-                'live_location_available' => true,
-                'updated_at' => now()->utc()->toISOString(),
-            ]);
-        }
-
-        return ['point' => $point, 'created' => $created, 'latest_updated' => $latestUpdated];
+        return ['point' => $point, 'created' => $latestUpdated, 'latest_updated' => $latestUpdated];
     }
 
     /**
@@ -425,61 +407,6 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
         }
 
         return false;
-    }
-
-    /**
-     * Keep route evidence at a lower frequency than the five-second live point.
-     * The Flutter client uses the same interval/distance policy locally; this
-     * server path applies it as a safe fallback without changing live ordering.
-     *
-     * @param  array<string, mixed>  $incoming
-     */
-    private function shouldRetainHistoryPoint(Reference $history, array $incoming): bool
-    {
-        $values = $history
-            ->orderByChild('received_at_ms')
-            ->limitToLast(1)
-            ->getValue();
-        $last = is_array($values) ? collect($values)->first(fn (mixed $value) => is_array($value)) : null;
-
-        if (! is_array($last)) {
-            return true;
-        }
-
-        $minimumIntervalMs = max(
-            15,
-            min(30, (int) config('pelekapro.firebase_tracking.history_sample_interval_seconds', 20))
-        ) * 1000;
-        $minimumDistance = max(
-            10,
-            min(500, (int) config('pelekapro.firebase_tracking.history_sample_distance_metres', 50))
-        );
-        $elapsed = (int) $incoming['recorded_at_ms'] - (int) ($last['recorded_at_ms'] ?? 0);
-
-        return $elapsed >= $minimumIntervalMs
-            || $this->distanceMetres($last, $incoming) >= $minimumDistance;
-    }
-
-    /**
-     * @param  array<string, mixed>  $from
-     * @param  array<string, mixed>  $to
-     */
-    private function distanceMetres(array $from, array $to): float
-    {
-        if (! is_numeric($from['latitude'] ?? null)
-            || ! is_numeric($from['longitude'] ?? null)
-        ) {
-            return INF;
-        }
-
-        $latitudeFrom = deg2rad((float) $from['latitude']);
-        $latitudeTo = deg2rad((float) $to['latitude']);
-        $latitudeDelta = $latitudeTo - $latitudeFrom;
-        $longitudeDelta = deg2rad((float) $to['longitude'] - (float) $from['longitude']);
-        $a = sin($latitudeDelta / 2) ** 2
-            + cos($latitudeFrom) * cos($latitudeTo) * sin($longitudeDelta / 2) ** 2;
-
-        return 6_371_000 * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /**

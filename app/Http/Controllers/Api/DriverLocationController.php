@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Contracts\FirebaseTrackingStore;
 use App\Exceptions\DeliveryWorkflowException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDriverLocationRequest;
@@ -69,8 +68,6 @@ class DriverLocationController extends Controller
     public function history(
         Request $request,
         Delivery $delivery,
-        FirebaseTrackingStore $firebaseStore,
-        FirebaseTrackingSessionMode $firebaseMode,
     ): JsonResponse {
         if (Gate::denies('viewTrackingLocations', $delivery)) {
             return $this->error('You are not allowed to view tracking locations for this delivery.', 403);
@@ -86,25 +83,6 @@ class DriverLocationController extends Controller
         }
 
         $perPage = (int) $request->query('per_page', 50);
-
-        if ($firebaseMode->forDelivery($delivery)) {
-            try {
-                $page = $firebaseStore->historyPage(
-                    $delivery,
-                    $perPage,
-                    $request->query('cursor'),
-                );
-            } catch (DeliveryWorkflowException $exception) {
-                return $this->error($exception->getMessage(), $exception->statusCode());
-            }
-
-            return $this->success('Tracking locations retrieved successfully', $page['data'], 200, [
-                'meta' => [
-                    'per_page' => $perPage,
-                    'next_cursor' => $page['next_cursor'],
-                ],
-            ]);
-        }
 
         $locations = $delivery->trackingLocations()
             ->orderBy('recorded_at')

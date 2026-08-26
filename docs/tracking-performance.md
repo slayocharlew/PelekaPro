@@ -69,6 +69,9 @@ npm run load:firebase
 
 The default simulates 100 concurrent deliveries, one customer per delivery, and
 12 five-second-equivalent live samples with history sampled every 20 seconds.
+Writes are issued in bounded batches of 25 by default so the emulator models
+independent devices without creating an unrealistic single-process burst. Set
+`PELEKAPRO_LOAD_CONCURRENCY` between 1 and 200 when sizing a staging run.
 Ramp progressively before targeting 5,000 concurrent deliveries:
 
 ```bash

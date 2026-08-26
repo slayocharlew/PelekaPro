@@ -408,6 +408,59 @@ class PortalDeliveryManagementTest extends TestCase
         $this->assertSame(['POST'], $route?->methods());
     }
 
+    public function test_portal_partial_navigation_returns_only_authorized_page_content(): void
+    {
+        $business = $this->business('Partial Portal Business');
+        $otherBusiness = $this->business('Hidden Partial Business');
+        $owner = $this->userWithRole('business_owner', $business);
+        $delivery = $this->deliveryFor($business);
+        $hiddenDelivery = $this->deliveryFor($otherBusiness);
+
+        $this->actingAs($owner, 'web')
+            ->withHeaders([
+                'X-Requested-With' => 'XMLHttpRequest',
+                'X-PelekaPro-Partial' => '1',
+                'Accept' => 'text/html',
+            ])
+            ->get(route('portal.deliveries.index'))
+            ->assertOk()
+            ->assertSee('data-portal-title', false)
+            ->assertSee('data-portal-navigation-state', false)
+            ->assertSee('data-portal-main', false)
+            ->assertSee($delivery->delivery_number)
+            ->assertDontSee($hiddenDelivery->delivery_number)
+            ->assertDontSee('<!DOCTYPE html>', false)
+            ->assertDontSee('data-portal-base', false)
+            ->assertDontSee('resources/js/app.js', false);
+    }
+
+    public function test_portal_ajax_mutation_follows_existing_workflow_redirect_as_partial_content(): void
+    {
+        $business = $this->business('Partial Assignment Business');
+        $owner = $this->userWithRole('business_owner', $business);
+        $driver = $this->driver($business);
+        $delivery = $this->deliveryFor($business);
+
+        $this->actingAs($owner, 'web')
+            ->from(route('portal.deliveries.show', $delivery))
+            ->withHeaders([
+                'X-Requested-With' => 'XMLHttpRequest',
+                'X-PelekaPro-Partial' => '1',
+                'Accept' => 'text/html',
+            ])
+            ->followingRedirects()
+            ->post(route('portal.deliveries.assign', $delivery), [
+                'driver_id' => $driver->id,
+            ])
+            ->assertOk()
+            ->assertSee('data-portal-main', false)
+            ->assertSee('Driver assigned successfully.')
+            ->assertSee($driver->name)
+            ->assertDontSee('<!DOCTYPE html>', false);
+
+        $this->assertSame($driver->id, $delivery->refresh()->assigned_driver_id);
+    }
+
     private function role(string $name): Role
     {
         return Role::query()->firstOrCreate(

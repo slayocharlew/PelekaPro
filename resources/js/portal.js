@@ -15,6 +15,11 @@ function initializePortalNavigation(root) {
 
 function initializeSubmittingForms(root) {
     root.querySelectorAll('[data-confirm]').forEach((form) => {
+        if (form.dataset.confirmReady === 'true') {
+            return;
+        }
+
+        form.dataset.confirmReady = 'true';
         form.addEventListener('submit', (event) => {
             if (!window.confirm(form.dataset.confirm)) {
                 event.preventDefault();
@@ -23,6 +28,11 @@ function initializeSubmittingForms(root) {
     });
 
     root.querySelectorAll('[data-submitting-form]').forEach((form) => {
+        if (form.dataset.submittingReady === 'true') {
+            return;
+        }
+
+        form.dataset.submittingReady = 'true';
         form.addEventListener('submit', (event) => {
             if (event.defaultPrevented) {
                 return;
@@ -36,8 +46,22 @@ function initializeSubmittingForms(root) {
 
             button.disabled = true;
             button.setAttribute('aria-busy', 'true');
+            form.setAttribute('aria-busy', 'true');
+            button.dataset.originalSubmitLabel ||= button.textContent;
             button.textContent = button.dataset.submitLabel || 'Submitting…';
         });
+    });
+}
+
+function restoreSubmittingForm(form) {
+    form.removeAttribute('aria-busy');
+    form.querySelectorAll('button[type="submit"]').forEach((button) => {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+
+        if (button.dataset.originalSubmitLabel) {
+            button.textContent = button.dataset.originalSubmitLabel;
+        }
     });
 }
 
@@ -343,6 +367,7 @@ async function loadDeliveryBrowser(root, requestedUrl, updateHistory = true) {
             headers: {
                 Accept: 'text/html',
                 'X-Requested-With': 'XMLHttpRequest',
+                'X-PelekaPro-Partial': '1',
             },
             signal: deliveryBrowserRequest.signal,
         });
@@ -434,12 +459,318 @@ function initializeDeliveryFilters(root) {
         loadDeliveryBrowser(root, link.href);
     });
 
-    if (root.dataset.deliveryPopstateReady !== 'true') {
-        root.dataset.deliveryPopstateReady = 'true';
-        window.addEventListener('popstate', () => {
-            loadDeliveryBrowser(root, window.location.href, false);
-        });
+}
+
+let portalNavigationRequest = null;
+let portalMutationInFlight = false;
+
+export function isPortalDestination(destination, portalBase, currentOrigin) {
+    try {
+        const origin = currentOrigin
+            || (typeof window !== 'undefined' ? window.location.origin : null);
+
+        if (!origin) {
+            return false;
+        }
+
+        const url = new URL(destination, origin);
+        const base = new URL(portalBase, origin);
+        const basePath = base.pathname.replace(/\/$/, '');
+
+        return url.origin === origin
+            && base.origin === origin
+            && (url.pathname === basePath || url.pathname.startsWith(`${basePath}/`));
+    } catch {
+        return false;
     }
+}
+
+function portalCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+}
+
+function setPortalBusy(root, busy, message = '') {
+    const main = root.querySelector('[data-portal-main]');
+    const progress = root.querySelector('[data-portal-progress]');
+    const status = root.querySelector('[data-portal-navigation-status]');
+
+    root.classList.toggle('is-navigating', busy);
+    main?.setAttribute('aria-busy', String(busy));
+    if (progress) progress.hidden = !busy;
+    if (status) status.textContent = message;
+}
+
+function showPortalNavigationError(root, message) {
+    const container = root.querySelector('[data-portal-main] .portal-container');
+
+    if (!container) {
+        return;
+    }
+
+    container.querySelector('[data-portal-navigation-error]')?.remove();
+    const alert = document.createElement('div');
+    alert.className = 'portal-alert portal-alert--error';
+    alert.dataset.portalNavigationError = 'true';
+    alert.setAttribute('role', 'alert');
+    alert.textContent = message;
+    container.prepend(alert);
+    alert.scrollIntoView({ block: 'nearest' });
+}
+
+function templateText(documentFragment, selector) {
+    const template = documentFragment.querySelector(selector);
+
+    return template?.content?.textContent?.trim() || '';
+}
+
+function updatePortalNavigation(root, activeSection) {
+    root.querySelectorAll('[data-portal-nav-section]').forEach((link) => {
+        const active = link.dataset.portalNavSection === activeSection;
+        link.classList.toggle('is-active', active);
+
+        if (active) {
+            link.setAttribute('aria-current', 'page');
+        } else {
+            link.removeAttribute('aria-current');
+        }
+    });
+
+    root.querySelector('[data-portal-nav]')?.classList.remove('is-open');
+    root.querySelector('[data-portal-nav-toggle]')?.setAttribute('aria-expanded', 'false');
+}
+
+function focusPortalContent(main, destination) {
+    const hash = new URL(destination, window.location.href).hash;
+
+    if (hash) {
+        const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+
+        if (target) {
+            target.scrollIntoView({ block: 'start' });
+            target.focus?.({ preventScroll: true });
+
+            return;
+        }
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    main.focus({ preventScroll: true });
+}
+
+function renderPortalResponse(root, html, destination) {
+    const documentFragment = new DOMParser().parseFromString(html, 'text/html');
+    const nextMain = documentFragment.querySelector('[data-portal-main]');
+    const currentMain = root.querySelector('[data-portal-main]');
+
+    if (!nextMain || !currentMain) {
+        return false;
+    }
+
+    currentMain.replaceWith(nextMain);
+    const title = templateText(documentFragment, '[data-portal-title]')
+        || documentFragment.title.trim();
+    if (title) document.title = title;
+    updatePortalNavigation(
+        root,
+        templateText(documentFragment, '[data-portal-navigation-state]')
+    );
+    initializePortalContent(root);
+    document.dispatchEvent(new CustomEvent('pelekapro:portal-rendered', {
+        detail: { main: nextMain },
+    }));
+    focusPortalContent(nextMain, destination);
+
+    return true;
+}
+
+function portalRequestHeaders() {
+    const headers = {
+        Accept: 'text/html',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-PelekaPro-Partial': '1',
+    };
+    const csrfToken = portalCsrfToken();
+
+    if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+    }
+
+    return headers;
+}
+
+async function requestPortalNavigation(root, requestedUrl, options = {}) {
+    const mutation = options.mutation === true;
+
+    if (mutation && portalMutationInFlight) {
+        if (options.form) restoreSubmittingForm(options.form);
+
+        return;
+    }
+
+    if (mutation) {
+        portalNavigationRequest?.abort();
+        portalNavigationRequest = null;
+    } else {
+        portalNavigationRequest?.abort();
+    }
+
+    const controller = new AbortController();
+    if (mutation) portalMutationInFlight = true;
+    else portalNavigationRequest = controller;
+    setPortalBusy(root, true, mutation ? 'Saving changes…' : 'Loading page…');
+
+    try {
+        const response = await fetch(requestedUrl, {
+            method: options.method || 'GET',
+            body: options.body || null,
+            credentials: 'same-origin',
+            cache: 'no-store',
+            redirect: 'follow',
+            headers: portalRequestHeaders(),
+            signal: controller.signal,
+        });
+        const responseUrl = response.url || requestedUrl;
+
+        if (!isPortalDestination(responseUrl, root.dataset.portalBase)) {
+            window.location.assign(responseUrl);
+
+            return;
+        }
+
+        const html = await response.text();
+        if (!response.ok || !renderPortalResponse(root, html, requestedUrl)) {
+            throw new Error('The portal response could not be displayed.');
+        }
+
+        const requested = new URL(requestedUrl, window.location.href);
+        const destination = new URL(responseUrl, window.location.href);
+        if (requested.hash
+            && requested.pathname === destination.pathname
+            && requested.search === destination.search
+        ) {
+            destination.hash = requested.hash;
+        }
+
+        if (options.history !== 'none' && destination.href !== window.location.href) {
+            window.history.pushState({ pelekaproPortal: true }, '', destination);
+        }
+
+        setPortalBusy(root, false, 'Page updated.');
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            return;
+        }
+
+        if (mutation) {
+            showPortalNavigationError(
+                root,
+                'PelekaPro could not confirm that change. Check your connection, then refresh before trying again.'
+            );
+            if (options.form) restoreSubmittingForm(options.form);
+            setPortalBusy(root, false, 'The change could not be confirmed.');
+        } else {
+            window.location.assign(requestedUrl);
+        }
+    } finally {
+        if (mutation) portalMutationInFlight = false;
+        else if (portalNavigationRequest === controller) portalNavigationRequest = null;
+    }
+}
+
+function formNavigationRequest(form, submitter) {
+    const method = (form.method || 'GET').toUpperCase();
+    const body = typeof FormData === 'function'
+        ? (submitter ? new FormData(form, submitter) : new FormData(form))
+        : null;
+    const url = new URL(form.action, window.location.href);
+
+    if (method === 'GET' && body) {
+        url.search = '';
+        for (const [key, value] of body.entries()) {
+            if (typeof value === 'string' && value.trim() !== '') {
+                url.searchParams.append(key, value);
+            }
+        }
+
+        return { method: 'GET', body: null, url };
+    }
+
+    return { method, body, url };
+}
+
+function initializePortalAjaxNavigation(root) {
+    if (root.dataset.portalAjaxReady === 'true') {
+        return;
+    }
+
+    root.dataset.portalAjaxReady = 'true';
+    root.addEventListener('click', (event) => {
+        const link = event.target.closest('a[href]');
+
+        if (!link
+            || event.defaultPrevented
+            || event.button !== 0
+            || event.metaKey
+            || event.ctrlKey
+            || event.shiftKey
+            || event.altKey
+            || link.target
+            || link.hasAttribute('download')
+            || link.hasAttribute('data-no-portal-ajax')
+            || !isPortalDestination(link.href, root.dataset.portalBase)
+        ) {
+            return;
+        }
+
+        const destination = new URL(link.href, window.location.href);
+        if (destination.pathname === window.location.pathname
+            && destination.search === window.location.search
+            && destination.hash
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        requestPortalNavigation(root, destination);
+    });
+
+    root.addEventListener('submit', (event) => {
+        const form = event.target;
+
+        if (!(form instanceof HTMLFormElement)
+            || event.defaultPrevented
+            || form.hasAttribute('data-no-portal-ajax')
+            || !isPortalDestination(form.action, root.dataset.portalBase)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        const request = formNavigationRequest(form, event.submitter);
+        requestPortalNavigation(root, request.url, {
+            method: request.method,
+            body: request.body,
+            mutation: request.method !== 'GET',
+            form,
+        });
+    });
+
+    window.addEventListener('popstate', () => {
+        if (isPortalDestination(window.location.href, root.dataset.portalBase)) {
+            requestPortalNavigation(root, window.location.href, { history: 'none' });
+        }
+    });
+}
+
+function initializePortalContent(root) {
+    initializeSubmittingForms(root);
+    initializeDeliveryItems(root);
+    initializeDeliverySelectors(root);
+    initializeBranchPickupDefaults(root);
+    initializeTrackingLink(root);
+    initializeDialogs(root);
+    initializeCustomerResolution(root);
+    initializeDeliveryFilters(root);
 }
 
 export function initializePortal() {
@@ -450,12 +781,6 @@ export function initializePortal() {
     }
 
     initializePortalNavigation(root);
-    initializeSubmittingForms(root);
-    initializeDeliveryItems(root);
-    initializeDeliverySelectors(root);
-    initializeBranchPickupDefaults(root);
-    initializeTrackingLink(root);
-    initializeDialogs(root);
-    initializeCustomerResolution(root);
-    initializeDeliveryFilters(root);
+    initializePortalContent(root);
+    initializePortalAjaxNavigation(root);
 }

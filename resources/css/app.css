@@ -164,6 +164,46 @@
 .portal-main {
     flex: 1;
     padding-block: 2rem 3rem;
+    transition: opacity 140ms ease;
+}
+
+.portal-main[aria-busy='true'] {
+    pointer-events: none;
+    opacity: 0.68;
+}
+
+.portal-navigation-progress {
+    position: fixed;
+    z-index: 100;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 3px;
+    overflow: hidden;
+    background: rgb(255 108 55 / 18%);
+}
+
+.portal-navigation-progress[hidden] {
+    display: none;
+}
+
+.portal-navigation-progress::after {
+    position: absolute;
+    width: 38%;
+    height: 100%;
+    background: var(--portal-primary);
+    content: '';
+    animation: portal-navigation-progress 900ms ease-in-out infinite;
+}
+
+@keyframes portal-navigation-progress {
+    from {
+        transform: translateX(-110%);
+    }
+
+    to {
+        transform: translateX(370%);
+    }
 }
 
 .portal-footer {

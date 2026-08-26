@@ -18,6 +18,7 @@ const viewersPerDelivery = integer('PELEKAPRO_LOAD_VIEWERS_PER_DELIVERY', 1, 1, 
 const samples = integer('PELEKAPRO_LOAD_SAMPLES', 12, 1, 120);
 const liveIntervalSeconds = integer('PELEKAPRO_LOAD_LIVE_INTERVAL_SECONDS', 5, 1, 60);
 const historyIntervalSeconds = integer('PELEKAPRO_LOAD_HISTORY_INTERVAL_SECONDS', 20, 15, 30);
+const concurrency = integer('PELEKAPRO_LOAD_CONCURRENCY', 25, 1, 200);
 const historyEvery = Math.max(1, Math.ceil(historyIntervalSeconds / liveIntervalSeconds));
 const projectId = 'demo-pelekapro-load';
 const root = 'delivery_tracking';
@@ -26,6 +27,17 @@ const startedAtMs = Date.now() - 1_000;
 const alias = (namespace, value) => createHash('sha256')
     .update(`${namespace}|${value}`)
     .digest('hex');
+
+const runInBatches = async (total, operation) => {
+    for (let offset = 0; offset < total; offset += concurrency) {
+        const size = Math.min(concurrency, total - offset);
+
+        await Promise.all(Array.from(
+            { length: size },
+            (_, relativeIndex) => operation(offset + relativeIndex),
+        ));
+    }
+};
 
 const environment = await initializeTestEnvironment({ projectId });
 const subscriptions = [];
@@ -40,11 +52,10 @@ try {
 
     await environment.withSecurityRulesDisabled(async (context) => {
         const database = context.database();
-        const writes = [];
-
-        for (let index = 0; index < deliveries; index += 1) {
+        await runInBatches(deliveries, (index) => {
             const deliveryAlias = alias('delivery', index);
-            writes.push(set(ref(database, `${root}/${deliveryAlias}`), {
+
+            return set(ref(database, `${root}/${deliveryAlias}`), {
                 control: {
                     active: false,
                     customer_token_fingerprint: alias('customer', index),
@@ -58,10 +69,8 @@ try {
                     occurred_at: null,
                     updated_at: new Date().toISOString(),
                 },
-            }));
-        }
-
-        await Promise.all(writes);
+            });
+        });
     });
 
     for (let index = 0; index < deliveries; index += 1) {
@@ -88,11 +97,10 @@ try {
 
     await environment.withSecurityRulesDisabled(async (context) => {
         const database = context.database();
-        const writes = [];
-
-        for (let index = 0; index < deliveries; index += 1) {
+        await runInBatches(deliveries, (index) => {
             const deliveryAlias = alias('delivery', index);
-            writes.push(update(ref(database, `${root}/${deliveryAlias}`), {
+
+            return update(ref(database, `${root}/${deliveryAlias}`), {
                 control: {
                     active: true,
                     session_alias: alias('session', index),
@@ -110,10 +118,8 @@ try {
                     occurred_at: new Date(startedAtMs).toISOString(),
                     updated_at: new Date().toISOString(),
                 },
-            }));
-        }
-
-        await Promise.all(writes);
+            });
+        });
     });
 
     for (const customer of customerDatabases) {
@@ -137,9 +143,7 @@ try {
     }
 
     for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
-        const writes = [];
-
-        for (let index = 0; index < deliveries; index += 1) {
+        await runInBatches(deliveries, async (index) => {
             const deliveryAlias = alias('delivery', index);
             const sessionAlias = alias('session', index);
             const driver = driverDatabases[index];
@@ -158,17 +162,15 @@ try {
                 received_at_ms: Date.now(),
             };
 
-            writes.push(set(ref(driver, `${root}/${deliveryAlias}/live`), point));
+            await set(ref(driver, `${root}/${deliveryAlias}/live`), point);
 
             if (sampleIndex % historyEvery === 0) {
-                writes.push(set(
+                await set(
                     ref(driver, `${root}/${deliveryAlias}/history/${sessionAlias}/${point.sample_id}`),
                     point,
-                ));
+                );
             }
-        }
-
-        await Promise.all(writes);
+        });
     }
 
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -183,6 +185,7 @@ try {
         live_writes: liveWrites,
         sampled_history_writes: historyWrites,
         history_reduction_percent: Math.round((1 - historyWrites / liveWrites) * 100),
+        max_concurrent_operations: concurrency,
         observed_live_events: liveEvents,
         observed_status_events: statusEvents,
         elapsed_ms: elapsedMs,

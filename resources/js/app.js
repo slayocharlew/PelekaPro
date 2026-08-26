@@ -7,3 +7,7 @@ initializeBusinessOnboarding();
 initializeCustomerDeliveryRequest();
 initializeCustomerTracking();
 initializePortal();
+
+document.addEventListener('pelekapro:portal-rendered', () => {
+    initializeBusinessOnboarding();
+});

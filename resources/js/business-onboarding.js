@@ -36,6 +36,12 @@ export async function initializeBusinessOnboarding() {
         return;
     }
 
+    if (form.dataset.businessOnboardingReady === 'true') {
+        return;
+    }
+
+    form.dataset.businessOnboardingReady = 'true';
+
     const mapElement = form.querySelector('[data-branch-location-map]');
     const latitudeInput = form.querySelector('[data-branch-latitude]');
     const longitudeInput = form.querySelector('[data-branch-longitude]');
@@ -163,6 +169,10 @@ export async function initializeBusinessOnboarding() {
     });
 
     const googleMaps = await loadGoogleMaps();
+
+    if (!form.isConnected) {
+        return;
+    }
 
     if (!googleMaps) {
         showUnavailableMap(mapElement);

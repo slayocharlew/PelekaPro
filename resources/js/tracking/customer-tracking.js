@@ -7,18 +7,18 @@ import {
     TERMINAL_STATUSES,
     applyLocationEvent,
     applySnapshot,
+    applyTrackingStatusEvent,
     applyTerminalEvent,
     createInitialState,
     locationIsFresh,
     validateLocationEvent,
     validateSnapshot,
+    validateTrackingStatusEvent,
     validateTerminalEvent,
 } from './state';
 
 const SNAPSHOT_DEBOUNCE_MS = 1_500;
 const SNAPSHOT_RETRY_MS = 10_000;
-const VISIBILITY_RESYNC_AFTER_MS = 15_000;
-const PERIODIC_RESYNC_MS = 30_000;
 
 class CustomerTrackingPage {
     constructor(root) {
@@ -31,12 +31,11 @@ class CustomerTrackingPage {
         this.firebase = new CustomerFirebaseTracking({
             csrfToken: () => this.csrfToken(),
             onLocation: (payload) => this.handleLocationEvent(payload),
-            onTerminal: (payload) => this.handleTerminalEvent(payload),
+            onStatus: (payload) => this.handleFirebaseStatusEvent(payload),
             onUnavailable: (connectionFailed) => this.handleFirebaseUnavailable(connectionFailed),
             onConnected: () => {
                 if (!this.ended) {
                     this.setConnection('live', 'Live connection');
-                    this.scheduleSnapshot('firebase-connected', true);
                 }
             },
         });
@@ -47,10 +46,9 @@ class CustomerTrackingPage {
         this.snapshotTimer = null;
         this.staleTimer = null;
         this.relativeTimeTimer = null;
-        this.periodicResyncTimer = null;
+        this.pendingFirebaseLocation = null;
         this.sessionExpiryTimer = null;
         this.lastSnapshotAt = 0;
-        this.hiddenAt = null;
         this.ended = false;
         this.elements = this.collectElements();
         this.map = new CustomerTrackingMap(this.elements.map);
@@ -61,10 +59,6 @@ class CustomerTrackingPage {
         this.bindSessionEnd();
         this.scheduleSessionExpiry();
         this.relativeTimeTimer = window.setInterval(() => this.renderTime(), 15_000);
-        this.periodicResyncTimer = window.setInterval(
-            () => this.scheduleSnapshot('periodic'),
-            PERIODIC_RESYNC_MS
-        );
         this.loadSnapshot('initial', true);
         this.registerServiceWorker();
     }
@@ -111,22 +105,7 @@ class CustomerTrackingPage {
         window.addEventListener('online', () => {
             if (!this.ended) {
                 this.setConnection('reconnecting', 'Reconnecting');
-                this.scheduleSnapshot('browser-online', true);
             }
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                this.hiddenAt = Date.now();
-
-                return;
-            }
-
-            if (this.hiddenAt && Date.now() - this.hiddenAt >= VISIBILITY_RESYNC_AFTER_MS) {
-                this.scheduleSnapshot('tab-visible', true);
-            }
-
-            this.hiddenAt = null;
         });
     }
 
@@ -323,7 +302,9 @@ class CustomerTrackingPage {
         } else {
             this.setConnection('live', 'Live connection');
         }
-        this.scheduleSnapshot('firebase-unavailable');
+        if (connectionFailed) {
+            this.scheduleSnapshot('firebase-unavailable');
+        }
     }
 
     subscribe(channelName, locationEvent, statusEvent) {
@@ -401,6 +382,14 @@ class CustomerTrackingPage {
             return;
         }
 
+        if (this.firebaseCredentialsUrl
+            && (!this.state.trackingActive || !ACTIVE_STATUSES.includes(this.state.status))
+        ) {
+            this.pendingFirebaseLocation = location;
+
+            return;
+        }
+
         const result = applyLocationEvent(this.state, location);
 
         if (result.requiresSnapshot) {
@@ -415,6 +404,47 @@ class CustomerTrackingPage {
 
         this.state = result.state;
         this.renderLocation();
+    }
+
+    handleFirebaseStatusEvent(payload) {
+        const status = validateTrackingStatusEvent(payload);
+
+        if (!status) {
+            this.scheduleSnapshot('malformed-firebase-status');
+
+            return;
+        }
+
+        const result = applyTrackingStatusEvent(this.state, status);
+
+        if (!result.changed) {
+            return;
+        }
+
+        this.state = result.state;
+        this.render();
+
+        if (this.state.ended) {
+            this.pendingFirebaseLocation = null;
+            this.finishTerminalState();
+
+            return;
+        }
+
+        if (this.pendingFirebaseLocation && this.state.trackingActive) {
+            const pending = this.pendingFirebaseLocation;
+            this.pendingFirebaseLocation = null;
+            this.handleLocationEvent({
+                latitude: pending.latitude,
+                longitude: pending.longitude,
+                accuracy: pending.accuracy,
+                speed: pending.speed,
+                heading: pending.heading,
+                battery_level: pending.batteryLevel,
+                recorded_at: pending.recordedAt,
+                updated_at: pending.updatedAt,
+            });
+        }
     }
 
     handleTerminalEvent(payload) {
@@ -577,7 +607,6 @@ class CustomerTrackingPage {
                 };
                 this.renderLocation();
                 this.renderStatus();
-                this.scheduleSnapshot('location-stale');
             }
         }, staleIn + 25);
     }
@@ -636,7 +665,6 @@ class CustomerTrackingPage {
         this.map.hideLocation();
         this.setConnection('ended', 'Tracking ended');
         this.elements.liveBadge.hidden = true;
-        window.clearInterval(this.periodicResyncTimer);
     }
 
     endSession(title, message, connectionState) {
@@ -651,7 +679,6 @@ class CustomerTrackingPage {
         window.clearTimeout(this.snapshotTimer);
         window.clearTimeout(this.staleTimer);
         window.clearTimeout(this.sessionExpiryTimer);
-        window.clearInterval(this.periodicResyncTimer);
         window.clearInterval(this.relativeTimeTimer);
         this.elements.loading.hidden = true;
         this.elements.content.hidden = true;

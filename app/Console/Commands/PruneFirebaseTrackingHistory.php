@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Contracts\FirebaseTrackingStore;
-use App\Models\Delivery;
 use App\Models\DeliveryTrackingSession;
 use Illuminate\Console\Command;
 use Throwable;
@@ -23,11 +22,18 @@ final class PruneFirebaseTrackingHistory extends Command
 
         try {
             DeliveryTrackingSession::query()
+                ->select(['id', 'delivery_id', 'started_at'])
+                ->where('started_at', '<', now()->subDays($retentionDays))
                 ->whereHas('locations', fn ($query) => $query->where('point_type', 'start'))
+                ->with([
+                    'delivery' => fn ($query) => $query
+                        ->withTrashed()
+                        ->select(['id', 'public_tracking_token']),
+                ])
                 ->orderBy('id')
                 ->chunkById(100, function ($sessions) use ($store, $cutoff, $batch, &$removed): void {
                     foreach ($sessions as $session) {
-                        $delivery = Delivery::withTrashed()->find($session->delivery_id);
+                        $delivery = $session->delivery;
 
                         if ($delivery) {
                             $removed += $store->pruneHistoryBefore($delivery, $session, $cutoff, $batch);

@@ -80,7 +80,18 @@ beforeEach(async () => {
 
 after(async () => environment?.cleanup());
 
-test('driver can append its scoped history point then advance live state', async () => {
+test('driver can advance five-second live state without retaining every point in history', async () => {
+    const database = driverDatabase();
+    const sample = point();
+
+    await assertSucceeds(set(ref(database, `delivery_tracking/${deliveryAlias}/live`), sample));
+    await assertFails(get(ref(
+        database,
+        `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`,
+    )));
+});
+
+test('driver can retain a sampled history point independently of live state', async () => {
     const database = driverDatabase();
     const sample = point();
 
@@ -88,7 +99,6 @@ test('driver can append its scoped history point then advance live state', async
         ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${sample.sample_id}`),
         sample,
     ));
-    await assertSucceeds(set(ref(database, `delivery_tracking/${deliveryAlias}/live`), sample));
 });
 
 test('driver cannot write another delivery or session', async () => {
@@ -114,15 +124,7 @@ test('older live point cannot replace newer state', async () => {
         recorded_at_ms: newest.recorded_at_ms - 5_000,
     });
 
-    await set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${newest.sample_id}`),
-        newest,
-    );
     await set(ref(database, `delivery_tracking/${deliveryAlias}/live`), newest);
-    await set(
-        ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${older.sample_id}`),
-        older,
-    );
     await assertFails(set(ref(database, `delivery_tracking/${deliveryAlias}/live`), older));
 });
 
@@ -132,11 +134,8 @@ test('equal timestamp requires a greater sequence', async () => {
     const lower = point({ sample_id: 'sample_lower_abcdefghijkl', sequence: 7 });
     const higher = point({ sample_id: 'sample_higher_abcdefghijk', sequence: 9 });
 
-    await set(ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${first.sample_id}`), first);
     await set(ref(database, `delivery_tracking/${deliveryAlias}/live`), first);
-    await set(ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${lower.sample_id}`), lower);
     await assertFails(set(ref(database, `delivery_tracking/${deliveryAlias}/live`), lower));
-    await set(ref(database, `delivery_tracking/${deliveryAlias}/history/${sessionAlias}/${higher.sample_id}`), higher);
     await assertSucceeds(set(ref(database, `delivery_tracking/${deliveryAlias}/live`), higher));
 });
 
@@ -201,6 +200,25 @@ test('customer reads only live and status for its exact delivery', async () => {
     await assertFails(get(ref(database, `delivery_tracking/${deliveryAlias}/history`)));
     await assertFails(get(ref(database, `delivery_tracking/${otherDeliveryAlias}/live`)));
     await assertFails(set(ref(database, `delivery_tracking/${deliveryAlias}/live`), sample));
+});
+
+test('customer can read pre-start public status but cannot read live state', async () => {
+    const database = customerDatabase();
+
+    await environment.withSecurityRulesDisabled(async (context) => {
+        await update(ref(context.database(), `delivery_tracking/${deliveryAlias}`), {
+            'control/active': false,
+            live: null,
+            public_status: {
+                status: 'assigned',
+                tracking_active: false,
+                live_location_available: false,
+            },
+        });
+    });
+
+    await assertSucceeds(get(ref(database, `delivery_tracking/${deliveryAlias}/public_status`)));
+    await assertFails(get(ref(database, `delivery_tracking/${deliveryAlias}/live`)));
 });
 
 test('unauthenticated clients cannot read or write tracking state', async () => {

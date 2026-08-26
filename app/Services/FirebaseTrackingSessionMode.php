@@ -29,6 +29,10 @@ final class FirebaseTrackingSessionMode
             return $this->store->enabled();
         }
 
+        if ($session->relationLoaded('startLocation')) {
+            return $session->startLocation !== null;
+        }
+
         return DeliveryTrackingLocation::query()
             ->where('delivery_id', $delivery->getKey())
             ->where('tracking_session_id', $session->getKey())

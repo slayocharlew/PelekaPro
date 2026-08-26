@@ -4,11 +4,13 @@ import {
     STATUS_PRESENTATION,
     applyLocationEvent,
     applySnapshot,
+    applyTrackingStatusEvent,
     applyTerminalEvent,
     createInitialState,
     locationIsFresh,
     validateLocationEvent,
     validateSnapshot,
+    validateTrackingStatusEvent,
     validateTerminalEvent,
 } from '../../resources/js/tracking/state.js';
 
@@ -78,6 +80,18 @@ function locationEvent(overrides = {}) {
         heading: null,
         battery_level: null,
         recorded_at: '2026-07-29T10:00:10.000Z',
+        updated_at: '2026-07-29T10:00:11.000Z',
+        ...overrides,
+    };
+}
+
+function statusEvent(overrides = {}) {
+    return {
+        tracking_code: 'TRK-TEST-001',
+        status: 'assigned',
+        tracking_active: false,
+        live_location_available: false,
+        occurred_at: null,
         updated_at: '2026-07-29T10:00:11.000Z',
         ...overrides,
     };
@@ -255,6 +269,49 @@ test('location events cannot activate tracking without an authoritative active s
     assert.equal(result.changed, false);
     assert.equal(result.requiresSnapshot, true);
     assert.equal(result.state.location, null);
+});
+
+test('Firebase waiting and active status events update authority without a Laravel snapshot', () => {
+    const waiting = applySnapshot(createInitialState(), validateSnapshot(snapshot({
+        delivery: {
+            status: 'location_confirmed',
+            tracking_active: false,
+            live_location_available: false,
+        },
+        live_location: null,
+        transport: {
+            name: 'firebase',
+            credentials_url: '/tracking/firebase-credentials',
+        },
+    })));
+    const assigned = applyTrackingStatusEvent(waiting, validateTrackingStatusEvent(statusEvent()));
+    const started = applyTrackingStatusEvent(assigned.state, validateTrackingStatusEvent(statusEvent({
+        status: 'on_the_way',
+        tracking_active: true,
+        live_location_available: true,
+    })));
+
+    assert.equal(assigned.changed, true);
+    assert.equal(assigned.state.status, 'assigned');
+    assert.equal(assigned.state.trackingActive, false);
+    assert.equal(started.changed, true);
+    assert.equal(started.state.status, 'on_the_way');
+    assert.equal(started.state.trackingActive, true);
+    assert.equal(started.state.liveLocationAvailable, false);
+});
+
+test('Firebase public status rejects contradictory or unsafe authority', () => {
+    assert.equal(validateTrackingStatusEvent(statusEvent({
+        status: 'assigned',
+        tracking_active: true,
+    })), null);
+    assert.equal(validateTrackingStatusEvent(statusEvent({
+        status: 'delivered',
+        occurred_at: null,
+    })), null);
+    assert.equal(validateTrackingStatusEvent(statusEvent({
+        tracking_code: '<script>',
+    })), null);
 });
 
 test('terminal event immediately ends tracking and clears marker state', () => {

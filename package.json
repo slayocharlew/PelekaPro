@@ -6,7 +6,8 @@
         "build": "vite build",
         "dev": "vite",
         "test:js": "node --test tests/JavaScript/*.test.js",
-        "test:firebase-rules": "firebase emulators:exec --only database --project demo-pelekapro \"node --test tests/Firebase/*.test.js\""
+        "test:firebase-rules": "firebase emulators:exec --only database --project demo-pelekapro \"node --test tests/Firebase/*.test.js\"",
+        "load:firebase": "firebase emulators:exec --only database --project demo-pelekapro-load \"node scripts/load/firebase-tracking-load.mjs\""
     },
     "devDependencies": {
         "@firebase/rules-unit-testing": "^5.0.2",

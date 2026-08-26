@@ -13,6 +13,8 @@ final class CustomerTrackingSnapshotService
 {
     private const ACTIVE_STATUSES = ['on_the_way', 'arrived'];
 
+    private const TERMINAL_STATUSES = ['delivered', 'failed', 'cancelled'];
+
     public function __construct(
         private readonly CustomerTrackingSessionService $sessions,
         private readonly LiveDeliveryLocationStore $liveLocations,
@@ -51,8 +53,10 @@ final class CustomerTrackingSnapshotService
 
         $activeSession = $this->activeSession($delivery);
         $trackingActive = $activeSession !== null;
-        $usesFirebase = $activeSession !== null
-            && $this->firebaseMode->forDelivery($delivery, $activeSession);
+        $usesFirebase = ! in_array($delivery->status, self::TERMINAL_STATUSES, true)
+            && ($activeSession !== null
+                ? $this->firebaseMode->forDelivery($delivery, $activeSession)
+                : $this->firebaseLocations->enabled());
         $liveLocation = $trackingActive
             ? $this->validatedLiveLocation($delivery, $activeSession, $usesFirebase)
             : null;
@@ -81,10 +85,8 @@ final class CustomerTrackingSnapshotService
                 'status_event' => 'delivery.tracking.status.updated',
             ],
             'transport' => [
-                'name' => $trackingActive
-                    ? ($usesFirebase ? 'firebase' : 'reverb')
-                    : ($this->firebaseLocations->enabled() ? 'snapshot' : 'reverb'),
-                'credentials_url' => $trackingActive && $usesFirebase
+                'name' => $usesFirebase ? 'firebase' : 'reverb',
+                'credentials_url' => $usesFirebase
                     ? route('customer.tracking.firebase-credentials', absolute: false)
                     : null,
             ],
@@ -122,10 +124,9 @@ final class CustomerTrackingSnapshotService
             return null;
         }
 
-        $activeSessions = $delivery->trackingSessions()
-            ->where('status', 'active')
-            ->whereNull('stopped_at')
-            ->get();
+        $activeSessions = $delivery->relationLoaded('activeTrackingSessions')
+            ? $delivery->activeTrackingSessions
+            : $delivery->activeTrackingSessions()->with('startLocation')->get();
 
         if ($activeSessions->count() !== 1) {
             return null;

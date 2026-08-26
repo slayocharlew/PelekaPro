@@ -23,6 +23,12 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
     /** @var array<int, string> */
     public array $terminalStatuses = [];
 
+    /** @var array<int, int> */
+    public array $prunedSessionIds = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $publicStatuses = [];
+
     public bool $failRevoke = false;
 
     public bool $failPublish = false;
@@ -34,9 +40,13 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
         return $this->isEnabled;
     }
 
-    public function activate(Delivery $delivery, DeliveryTrackingSession $session, User $driver): array
-    {
-        return $this->controls[$delivery->id] = [
+    public function activate(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+        ?array $startPayload = null,
+    ): array {
+        $control = $this->controls[$delivery->id] = [
             'delivery_alias' => str_repeat('d', 64),
             'session_alias' => str_repeat('s', 64),
             'driver_uid' => 'driver_'.str_repeat('u', 32),
@@ -46,6 +56,28 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
             'session_id' => $session->id,
             'driver_id' => $driver->id,
         ];
+
+        $this->publicStatuses[$delivery->id] = $this->statusPayload($delivery, true, $startPayload !== null);
+
+        if ($startPayload !== null) {
+            $this->storePoint($delivery, $session, $startPayload, true);
+        }
+
+        return $control;
+    }
+
+    public function publishCustomerStatus(Delivery $delivery): void
+    {
+        if (! $this->enabled() || $delivery->started_at !== null) {
+            return;
+        }
+
+        $this->controls[$delivery->id] = [
+            'active' => false,
+            'customer_token_fingerprint' => 'customer-token-fingerprint',
+        ];
+        unset($this->live[$delivery->id]);
+        $this->publicStatuses[$delivery->id] = $this->statusPayload($delivery, false, false);
     }
 
     public function removeActivation(Delivery $delivery): void
@@ -83,6 +115,16 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
         array $payload,
     ): array {
         $this->activeControl($delivery, $session, $driver);
+
+        return $this->storePoint($delivery, $session, $payload, true);
+    }
+
+    private function storePoint(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        array $payload,
+        bool $retainHistory,
+    ): array {
         $recordedAt = Carbon::parse($payload['recorded_at'])->utc();
         $sampleId = hash('sha256', implode('|', [
             $delivery->id,
@@ -104,8 +146,11 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
             'recorded_at_ms' => $recordedAt->getTimestampMs(),
             'received_at_ms' => now()->getTimestampMs(),
         ];
-        $created = ! isset($this->history[$delivery->id][$sampleId]);
-        $this->history[$delivery->id][$sampleId] = $point;
+        $created = $retainHistory && ! isset($this->history[$delivery->id][$sampleId]);
+
+        if ($created) {
+            $this->history[$delivery->id][$sampleId] = $point;
+        }
         $current = $this->live[$delivery->id] ?? null;
         $latestUpdated = ! is_array($current)
             || $point['recorded_at_ms'] > $current['recorded_at_ms']
@@ -139,7 +184,12 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
 
     public function assertCustomerScope(Delivery $delivery, DeliveryTrackingSession $session): void
     {
-        if ($this->getAuthoritativeLatest($delivery, $session) === null) {
+        $control = $this->controls[$delivery->id] ?? null;
+
+        if (! is_array($control)
+            || ($control['active'] ?? false) !== true
+            || ($control['session_id'] ?? null) !== $session->id
+        ) {
             throw new DeliveryWorkflowException('Firebase tracking is not active for this delivery.', 409);
         }
     }
@@ -184,6 +234,7 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
         }
 
         $this->terminalStatuses[$delivery->id] = $delivery->status;
+        $this->publicStatuses[$delivery->id] = $this->statusPayload($delivery, false, false);
         unset($this->live[$delivery->id]);
     }
 
@@ -193,6 +244,8 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
         int $cutoffTimestampMs,
         int $batchSize = 500,
     ): int {
+        $this->prunedSessionIds[] = (int) $session->getKey();
+
         return 0;
     }
 
@@ -212,6 +265,19 @@ final class InMemoryFirebaseTrackingStore implements FirebaseTrackingStore
                 'recorded_at' => $point['recorded_at'],
             ], array_slice($points, 0, $perPage)),
             'next_cursor' => null,
+        ];
+    }
+
+    /** @return array<string, bool|string|null> */
+    private function statusPayload(Delivery $delivery, bool $trackingActive, bool $liveAvailable): array
+    {
+        return [
+            'tracking_code' => (string) $delivery->tracking_code,
+            'status' => (string) $delivery->status,
+            'tracking_active' => $trackingActive,
+            'live_location_available' => $liveAvailable,
+            'occurred_at' => null,
+            'updated_at' => now()->utc()->toISOString(),
         ];
     }
 }

@@ -86,7 +86,12 @@ final class CustomerTrackingSessionService
             return null;
         }
 
-        $delivery = Delivery::query()->find($claim['delivery_id']);
+        $delivery = Delivery::query()
+            ->with([
+                'assignedDriver',
+                'activeTrackingSessions.startLocation',
+            ])
+            ->find($claim['delivery_id']);
 
         if (! $delivery || ! $this->claimMatchesDelivery($claim, $delivery)) {
             return null;
@@ -97,14 +102,15 @@ final class CustomerTrackingSessionService
             channelAlias: $claim['channel_alias'],
             issuedAt: $claim['issued_at'],
             expiresAt: $claim['expires_at'],
+            delivery: $delivery,
         );
     }
 
     public function deliveryForPrincipal(CustomerTrackingPrincipal $principal): ?Delivery
     {
-        $delivery = Delivery::query()->find($principal->deliveryId);
+        $delivery = $principal->authoritativeDelivery();
 
-        if (! $delivery) {
+        if ((int) $delivery->getKey() !== $principal->deliveryId || $delivery->trashed()) {
             return null;
         }
 

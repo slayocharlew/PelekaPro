@@ -255,6 +255,50 @@ class CustomerTrackingSnapshotTest extends TestCase
         $this->assertStringNotContainsString('driver_id', $encoded);
     }
 
+    public function test_customer_can_subscribe_to_firebase_status_before_driver_starts(): void
+    {
+        config()->set('pelekapro.live_tracking.driver', 'firebase');
+        $firebase = new InMemoryFirebaseTrackingStore;
+        $this->app->instance(FirebaseTrackingStore::class, $firebase);
+        $business = $this->customerTrackingBusiness();
+        $driver = $this->customerTrackingDriver($business);
+        $delivery = $this->customerTrackingDelivery($business, $driver, 'assigned', false);
+        $token = Mockery::mock(UnencryptedToken::class);
+        $token->shouldReceive('toString')->once()->andReturn('waiting-customer-firebase-token');
+        $auth = Mockery::mock(FirebaseAuth::class);
+        $auth->shouldReceive('createCustomToken')
+            ->once()
+            ->withArgs(fn (string $uid, array $claims, int $ttl): bool => str_starts_with($uid, 'customer_')
+                && $claims['tracking_role'] === 'customer'
+                && is_string($claims['delivery_alias'])
+                && is_string($claims['token_fingerprint'])
+                && $ttl > 0)
+            ->andReturn($token);
+        $this->app->instance(FirebaseAuth::class, $auth);
+
+        $this->snapshot($delivery)
+            ->assertOk()
+            ->assertJsonPath('delivery.status', 'assigned')
+            ->assertJsonPath('delivery.tracking_active', false)
+            ->assertJsonPath('live_location', null)
+            ->assertJsonPath('transport.name', 'firebase')
+            ->assertJsonPath('transport.credentials_url', '/tracking/firebase-credentials');
+
+        $cookieName = app(CustomerTrackingSessionService::class)->cookieName();
+        $cookieValue = $this->customerTrackingCookieValue($delivery);
+        Auth::forgetGuards();
+
+        $this->withCredentials()
+            ->withCookie($cookieName, $cookieValue)
+            ->postJson('/tracking/firebase-credentials')
+            ->assertOk()
+            ->assertJsonPath('data.token', 'waiting-customer-firebase-token');
+
+        $this->assertSame('assigned', $firebase->publicStatuses[$delivery->id]['status']);
+        $this->assertFalse($firebase->publicStatuses[$delivery->id]['tracking_active']);
+        $this->assertArrayNotHasKey($delivery->id, $firebase->live);
+    }
+
     public function test_expired_or_malformed_redis_state_is_never_returned_as_live(): void
     {
         $business = $this->customerTrackingBusiness();

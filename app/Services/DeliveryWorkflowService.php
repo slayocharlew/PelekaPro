@@ -86,8 +86,7 @@ class DeliveryWorkflowService
                         $startedAt,
                     );
                     $firebaseActivationAttempted = true;
-                    $this->firebaseTrackingStore->activate($lockedDelivery, $session, $driver);
-                    $this->firebaseTrackingStore->storeServerSample(
+                    $this->firebaseTrackingStore->activate(
                         $lockedDelivery,
                         $session,
                         $driver,
@@ -102,9 +101,15 @@ class DeliveryWorkflowService
         } catch (Throwable $throwable) {
             if ($firebaseActivationAttempted) {
                 try {
-                    $this->firebaseTrackingStore->removeActivation($delivery);
+                    $authoritative = Delivery::query()->find($delivery->getKey());
+
+                    if ($authoritative && $authoritative->started_at === null) {
+                        $this->firebaseTrackingStore->publishCustomerStatus($authoritative);
+                    } else {
+                        $this->firebaseTrackingStore->removeActivation($delivery);
+                    }
                 } catch (Throwable $cleanupFailure) {
-                    Log::critical('Unable to remove a rolled-back Firebase tracking activation.', [
+                    Log::critical('Unable to restore Firebase after a rolled-back tracking activation.', [
                         'delivery_id' => $delivery->getKey(),
                         'exception_type' => $cleanupFailure::class,
                     ]);

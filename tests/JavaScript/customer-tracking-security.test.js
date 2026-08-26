@@ -48,20 +48,24 @@ test('session deletion is CSRF-protected, same-origin, and clears live subscript
     assert.match(source, /this\.map\.destroy\(\)/);
 });
 
-test('reconnection, online, and visibility recovery request authoritative snapshots', async () => {
-    const source = await readFile(
+test('Firebase tracking is event driven after one initial Laravel snapshot', async () => {
+    const [source, firebaseSource] = await Promise.all([
         new URL('../../resources/js/tracking/customer-tracking.js', import.meta.url),
-        'utf8'
-    );
+        new URL('../../resources/js/tracking/firebase-tracking.js', import.meta.url),
+    ].map((path) => readFile(path, 'utf8')));
 
     assert.match(source, /state_change/);
-    assert.match(source, /browser-online/);
-    assert.match(source, /tab-visible/);
     assert.match(source, /echo-connected/);
     assert.match(source, /channel-subscribed/);
-    assert.match(source, /periodic/);
     assert.match(source, /GET/);
     assert.match(source, /cache: 'no-store'/);
+    assert.equal(source.includes('PERIODIC_RESYNC_MS'), false);
+    assert.equal(source.includes("scheduleSnapshot('firebase-connected'"), false);
+    assert.equal(source.includes("scheduleSnapshot('browser-online'"), false);
+    assert.equal(source.includes("scheduleSnapshot('tab-visible'"), false);
+    assert.match(firebaseSource, /public_status/);
+    assert.match(firebaseSource, /\.info\/connected/);
+    assert.match(firebaseSource, /this\.subscribeLive\(\)/);
 });
 
 test('frontend source exposes no Reverb secret or application key', async () => {

@@ -10,7 +10,14 @@ interface FirebaseTrackingStore
 {
     public function enabled(): bool;
 
-    public function activate(Delivery $delivery, DeliveryTrackingSession $session, User $driver): array;
+    public function activate(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+        ?array $startPayload = null,
+    ): array;
+
+    public function publishCustomerStatus(Delivery $delivery): void;
 
     public function removeActivation(Delivery $delivery): void;
 

@@ -31,8 +31,12 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
     /**
      * @return array{delivery_alias: string, session_alias: string, driver_uid: string, credential_version: string, access_expires_at_ms: int}
      */
-    public function activate(Delivery $delivery, DeliveryTrackingSession $session, User $driver): array
-    {
+    public function activate(
+        Delivery $delivery,
+        DeliveryTrackingSession $session,
+        User $driver,
+        ?array $startPayload = null,
+    ): array {
         $expiresAtMs = now()->addMinutes($this->credentialLifetime())->getTimestampMs();
         $control = [
             'active' => true,
@@ -46,11 +50,25 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             'started_at_ms' => $session->started_at?->getTimestampMs(),
         ];
 
-        $this->deliveryReference($delivery)->update([
+        $updates = [
             'control' => $control,
             'live' => null,
             'public_status' => $this->statusPayload($delivery, true, false, $session->started_at),
-        ]);
+        ];
+
+        if ($startPayload !== null) {
+            $recordedAt = Carbon::parse($startPayload['recorded_at'])->utc();
+            $sampleId = $this->serverSampleId($delivery, $session, $startPayload, $recordedAt);
+            $point = $this->pointPayload($startPayload, $sampleId, $recordedAt);
+            $sessionAlias = $this->aliases->session($delivery, $session);
+            $updates['live'] = $point;
+            $updates["history/{$sessionAlias}/{$sampleId}"] = $point;
+            $updates['public_status'] = $this->statusPayload($delivery, true, true, $session->started_at);
+        }
+
+        // One multi-path write keeps the MySQL transaction boundary short and
+        // prevents clients from observing a partially initialized session.
+        $this->deliveryReference($delivery)->update($updates);
 
         return [
             'delivery_alias' => $this->aliases->delivery($delivery),
@@ -59,6 +77,27 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             'credential_version' => $control['credential_version'],
             'access_expires_at_ms' => $expiresAtMs,
         ];
+    }
+
+    public function publishCustomerStatus(Delivery $delivery): void
+    {
+        if (! $this->enabled() || $delivery->started_at !== null) {
+            return;
+        }
+
+        $this->deliveryReference($delivery)->update([
+            'control/active' => false,
+            'control/session_alias' => null,
+            'control/driver_uid' => null,
+            'control/credential_version' => null,
+            'control/access_expires_at_ms' => 0,
+            'control/started_at_ms' => null,
+            'control/customer_token_fingerprint' => $this->customerAliases->tokenFingerprint(
+                (string) $delivery->public_tracking_token
+            ),
+            'live' => null,
+            'public_status' => $this->statusPayload($delivery, false, false, $delivery->updated_at),
+        ]);
     }
 
     public function removeActivation(Delivery $delivery): void
@@ -112,15 +151,13 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
         $sampleId = $this->serverSampleId($delivery, $session, $payload, $recordedAt);
         $point = $this->pointPayload($payload, $sampleId, $recordedAt);
         $deliveryReference = $this->deliveryReference($delivery);
-        $historyReference = $deliveryReference
+        $sessionHistoryReference = $deliveryReference
             ->getChild('history')
-            ->getChild($this->aliases->session($delivery, $session))
-            ->getChild($sampleId);
-
-        $created = ! $historyReference->getSnapshot()->exists();
+            ->getChild($this->aliases->session($delivery, $session));
+        $created = $this->shouldRetainHistoryPoint($sessionHistoryReference, $point);
 
         if ($created) {
-            $historyReference->set($point);
+            $sessionHistoryReference->getChild($sampleId)->set($point);
         }
 
         $latestUpdated = $this->advanceLatest($deliveryReference->getChild('live'), $point);
@@ -388,6 +425,61 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
         }
 
         return false;
+    }
+
+    /**
+     * Keep route evidence at a lower frequency than the five-second live point.
+     * The Flutter client uses the same interval/distance policy locally; this
+     * server path applies it as a safe fallback without changing live ordering.
+     *
+     * @param  array<string, mixed>  $incoming
+     */
+    private function shouldRetainHistoryPoint(Reference $history, array $incoming): bool
+    {
+        $values = $history
+            ->orderByChild('received_at_ms')
+            ->limitToLast(1)
+            ->getValue();
+        $last = is_array($values) ? collect($values)->first(fn (mixed $value) => is_array($value)) : null;
+
+        if (! is_array($last)) {
+            return true;
+        }
+
+        $minimumIntervalMs = max(
+            15,
+            min(30, (int) config('pelekapro.firebase_tracking.history_sample_interval_seconds', 20))
+        ) * 1000;
+        $minimumDistance = max(
+            10,
+            min(500, (int) config('pelekapro.firebase_tracking.history_sample_distance_metres', 50))
+        );
+        $elapsed = (int) $incoming['recorded_at_ms'] - (int) ($last['recorded_at_ms'] ?? 0);
+
+        return $elapsed >= $minimumIntervalMs
+            || $this->distanceMetres($last, $incoming) >= $minimumDistance;
+    }
+
+    /**
+     * @param  array<string, mixed>  $from
+     * @param  array<string, mixed>  $to
+     */
+    private function distanceMetres(array $from, array $to): float
+    {
+        if (! is_numeric($from['latitude'] ?? null)
+            || ! is_numeric($from['longitude'] ?? null)
+        ) {
+            return INF;
+        }
+
+        $latitudeFrom = deg2rad((float) $from['latitude']);
+        $latitudeTo = deg2rad((float) $to['latitude']);
+        $latitudeDelta = $latitudeTo - $latitudeFrom;
+        $longitudeDelta = deg2rad((float) $to['longitude'] - (float) $from['longitude']);
+        $a = sin($latitudeDelta / 2) ** 2
+            + cos($latitudeFrom) * cos($latitudeTo) * sin($longitudeDelta / 2) ** 2;
+
+        return 6_371_000 * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /**

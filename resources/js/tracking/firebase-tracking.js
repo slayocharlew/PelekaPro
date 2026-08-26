@@ -47,14 +47,16 @@ function normalizeLivePoint(value) {
 }
 
 export class CustomerFirebaseTracking {
-    constructor({ csrfToken, onLocation, onTerminal, onUnavailable, onConnected }) {
+    constructor({ csrfToken, onLocation, onStatus, onUnavailable, onConnected }) {
         this.csrfToken = csrfToken;
         this.onLocation = onLocation;
-        this.onTerminal = onTerminal;
+        this.onStatus = onStatus;
         this.onUnavailable = onUnavailable;
         this.onConnected = onConnected;
         this.auth = null;
         this.unsubscribers = [];
+        this.liveUnsubscribe = null;
+        this.database = null;
         this.databasePath = null;
     }
 
@@ -95,35 +97,43 @@ export class CustomerFirebaseTracking {
         this.auth = inMemoryAuth;
         await signInWithCustomToken(this.auth, credential.token);
         const database = getDatabase(app);
+        this.database = database;
         this.databasePath = credential.database_path;
 
         this.unsubscribers = [
-            onValue(ref(database, `${this.databasePath}/live`), (snapshot) => {
-                const location = normalizeLivePoint(snapshot.val());
-
-                if (location) {
-                    this.onLocation(location);
-                } else {
-                    this.onUnavailable(false);
-                }
-            }, () => this.onUnavailable(true)),
             onValue(ref(database, `${this.databasePath}/public_status`), (snapshot) => {
                 const status = snapshot.val();
 
-                if (status && ['delivered', 'failed', 'cancelled'].includes(status.status)) {
-                    this.onTerminal(status);
+                if (status) {
+                    this.onStatus(status);
+
+                    if (status.tracking_active === true
+                        && !['delivered', 'failed', 'cancelled'].includes(status.status)
+                    ) {
+                        this.subscribeLive();
+                    } else {
+                        this.unsubscribeLive();
+                        this.onUnavailable(false);
+                    }
+                }
+            }, () => this.onUnavailable(true)),
+            onValue(ref(database, '.info/connected'), (snapshot) => {
+                if (snapshot.val() === true) {
+                    this.onConnected();
                 }
             }, () => this.onUnavailable(true)),
         ];
-        this.onConnected();
     }
 
     async disconnect() {
+        this.unsubscribeLive();
+
         for (const unsubscribe of this.unsubscribers) {
             unsubscribe();
         }
 
         this.unsubscribers = [];
+        this.database = null;
         this.databasePath = null;
 
         if (this.auth?.currentUser) {
@@ -131,6 +141,34 @@ export class CustomerFirebaseTracking {
         }
 
         this.auth = null;
+    }
+
+    subscribeLive() {
+        if (this.liveUnsubscribe || !this.database || !this.databasePath) {
+            return;
+        }
+
+        this.liveUnsubscribe = onValue(
+            ref(this.database, `${this.databasePath}/live`),
+            (snapshot) => {
+                const location = normalizeLivePoint(snapshot.val());
+
+                if (location) {
+                    this.onLocation(location);
+                } else {
+                    this.onUnavailable(false);
+                }
+            },
+            () => {
+                this.unsubscribeLive();
+                this.onUnavailable(true);
+            }
+        );
+    }
+
+    unsubscribeLive() {
+        this.liveUnsubscribe?.();
+        this.liveUnsubscribe = null;
     }
 }
 

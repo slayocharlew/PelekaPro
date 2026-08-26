@@ -112,6 +112,13 @@ class Delivery extends Model
         return $this->hasMany(DeliveryTrackingSession::class);
     }
 
+    public function activeTrackingSessions(): HasMany
+    {
+        return $this->hasMany(DeliveryTrackingSession::class)
+            ->where('status', 'active')
+            ->whereNull('stopped_at');
+    }
+
     public function trackingLocations(): HasMany
     {
         return $this->hasMany(DeliveryTrackingLocation::class);

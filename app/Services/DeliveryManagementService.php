@@ -44,6 +44,7 @@ class DeliveryManagementService
     public function __construct(
         private readonly DeliveryNumberService $numbers,
         private readonly DeliveryWorkflowService $workflow,
+        private readonly FirebaseCustomerStatusPublisher $customerStatus,
     ) {}
 
     /**
@@ -147,6 +148,8 @@ class DeliveryManagementService
             return $this->persistDelivery($payload, $businessId, $user, $customer, $address);
         });
 
+        $this->customerStatus->publish($delivery);
+
         return $delivery->load($this->relations());
     }
 
@@ -172,6 +175,8 @@ class DeliveryManagementService
 
             return $this->persistDelivery($payload, $businessId, $user, $customer, $address);
         });
+
+        $this->customerStatus->publish($delivery);
 
         return $delivery->load($this->relations());
     }
@@ -199,6 +204,8 @@ class DeliveryManagementService
 
             return $this->persistDelivery($payload, $businessId, $user, $customer, $address);
         });
+
+        $this->customerStatus->publish($delivery);
 
         return $delivery->load($this->relations());
     }
@@ -256,6 +263,8 @@ class DeliveryManagementService
 
             return $lockedDelivery;
         });
+
+        $this->customerStatus->publish($updated);
 
         return $updated->load($this->relations());
     }

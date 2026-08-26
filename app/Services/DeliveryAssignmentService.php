@@ -13,6 +13,10 @@ class DeliveryAssignmentService
 {
     private const LOCKED_STATUSES = ['on_the_way', 'arrived', 'delivered', 'failed', 'cancelled'];
 
+    public function __construct(
+        private readonly FirebaseCustomerStatusPublisher $customerStatus,
+    ) {}
+
     /**
      * @return Collection<int, User>
      */
@@ -40,7 +44,7 @@ class DeliveryAssignmentService
 
     public function assign(Delivery $delivery, User $driver, ?User $changedBy): Delivery
     {
-        return DB::transaction(function () use ($delivery, $driver, $changedBy): Delivery {
+        $assigned = DB::transaction(function () use ($delivery, $driver, $changedBy): Delivery {
             $lockedDelivery = Delivery::query()
                 ->whereKey($delivery->getKey())
                 ->lockForUpdate()
@@ -85,11 +89,15 @@ class DeliveryAssignmentService
 
             return $lockedDelivery->refresh();
         });
+
+        $this->customerStatus->publish($assigned);
+
+        return $assigned;
     }
 
     public function unassign(Delivery $delivery, ?User $changedBy): Delivery
     {
-        return DB::transaction(function () use ($delivery, $changedBy): Delivery {
+        $unassigned = DB::transaction(function () use ($delivery, $changedBy): Delivery {
             $lockedDelivery = Delivery::query()
                 ->whereKey($delivery->getKey())
                 ->lockForUpdate()
@@ -126,6 +134,10 @@ class DeliveryAssignmentService
 
             return $lockedDelivery->refresh();
         });
+
+        $this->customerStatus->publish($unassigned);
+
+        return $unassigned;
     }
 
     public function canChangeDriver(Delivery $delivery): bool

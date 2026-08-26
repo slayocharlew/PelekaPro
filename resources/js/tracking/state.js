@@ -236,6 +236,35 @@ export function validateTerminalEvent(payload) {
     };
 }
 
+export function validateTrackingStatusEvent(payload) {
+    if (!isPlainObject(payload)
+        || typeof payload.tracking_code !== 'string'
+        || !/^[A-Za-z0-9-]{1,64}$/.test(payload.tracking_code)
+        || !DELIVERY_STATUSES.includes(payload.status)
+        || typeof payload.tracking_active !== 'boolean'
+        || typeof payload.live_location_available !== 'boolean'
+        || !validTimestamp(payload.updated_at)
+        || (payload.occurred_at !== null && !validTimestamp(payload.occurred_at))
+        || (payload.tracking_active && !ACTIVE_STATUSES.includes(payload.status))
+        || (payload.live_location_available && !payload.tracking_active)
+        || (TERMINAL_STATUSES.includes(payload.status)
+            && (payload.tracking_active
+                || payload.live_location_available
+                || !validTimestamp(payload.occurred_at)))
+    ) {
+        return null;
+    }
+
+    return {
+        trackingCode: payload.tracking_code,
+        status: payload.status,
+        trackingActive: payload.tracking_active,
+        liveLocationAvailable: payload.live_location_available,
+        occurredAt: payload.occurred_at,
+        updatedAt: payload.updated_at,
+    };
+}
+
 export function createInitialState() {
     return {
         trackingCode: null,
@@ -306,6 +335,41 @@ export function applyTerminalEvent(state, terminal) {
             ended: true,
         },
         changed: true,
+    };
+}
+
+export function applyTrackingStatusEvent(state, status) {
+    if (state.trackingCode && status.trackingCode !== state.trackingCode) {
+        return { state, changed: false };
+    }
+
+    if (TERMINAL_STATUSES.includes(status.status)) {
+        return applyTerminalEvent(state, {
+            trackingCode: status.trackingCode,
+            status: status.status,
+            occurredAt: status.occurredAt,
+        });
+    }
+
+    const keepLocation = status.trackingActive
+        && status.liveLocationAvailable
+        && locationIsFresh(state.location);
+    const nextState = {
+        ...state,
+        trackingCode: status.trackingCode,
+        status: status.status,
+        trackingActive: status.trackingActive,
+        liveLocationAvailable: keepLocation,
+        location: keepLocation ? state.location : null,
+        ended: false,
+    };
+
+    return {
+        state: nextState,
+        changed: nextState.status !== state.status
+            || nextState.trackingActive !== state.trackingActive
+            || nextState.liveLocationAvailable !== state.liveLocationAvailable
+            || nextState.location !== state.location,
     };
 }
 

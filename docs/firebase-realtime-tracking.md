@@ -7,7 +7,7 @@ MySQL
 → authoritative delivery status, tracking-session lifecycle, and start/end GPS evidence
 
 Firebase Realtime Database
-→ intermediate GPS history (30 days) and the current live point
+→ sampled GPS history (30 days), customer-safe status, and the current live point
 
 Redis + Reverb
 → retained as the rollback transport while PELEKAPRO_LIVE_TRACKING_DRIVER=redis
@@ -93,6 +93,12 @@ their active delivery/session and can advance `live` only in timestamp/sequence
 order. Customer custom tokens are read-only and scoped to one opaque delivery
 alias. Control state and history are never customer-readable.
 
+Customer credentials may be issued before the driver starts. In that state the
+customer may read only `public_status`; `live` remains empty and Firebase rules
+deny that read until authoritative control becomes active. The browser then
+receives start, live, and terminal changes directly from Firebase without
+periodically polling Laravel.
+
 ## Credential leases
 
 Laravel issues 30-minute custom-token leases through:
@@ -122,6 +128,11 @@ Production must run Laravel's scheduler. The terminal outbox is recorded in the
 same MySQL transaction as the terminal delivery state. A Firebase outage after
 commit therefore cannot undo delivery completion, and the safe terminal status
 is retried without restoring live writes.
+
+Live points and history have different write frequencies. `/live` may advance
+approximately every five seconds, while history is retained every 20 seconds by
+default or after a meaningful 50-metre movement. See
+`docs/tracking-performance.md` for configuration and emulator load testing.
 
 ## Local verification
 

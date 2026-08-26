@@ -13,6 +13,10 @@ use Kreait\Firebase\Contract\Auth;
 
 final class FirebaseTrackingCredentialService
 {
+    private const ACTIVE_STATUSES = ['on_the_way', 'arrived'];
+
+    private const TERMINAL_STATUSES = ['delivered', 'failed', 'cancelled'];
+
     public function __construct(
         private readonly Container $container,
         private readonly DeliveryTrackingAuthority $authority,
@@ -70,19 +74,27 @@ final class FirebaseTrackingCredentialService
     {
         $delivery = $this->customerSessions->deliveryForPrincipal($principal);
         abort_unless($delivery instanceof Delivery, 401);
-        abort_unless(
-            $delivery->started_at !== null && in_array($delivery->status, ['on_the_way', 'arrived'], true),
-            409
-        );
-        $sessions = $delivery->trackingSessions()
-            ->where('status', 'active')
-            ->whereNull('stopped_at')
-            ->get();
-        abort_unless($sessions->count() === 1, 409);
-        $session = $sessions->first();
-        abort_unless((string) $session->driver_id === (string) $delivery->assigned_driver_id, 409);
-        abort_unless($this->firebaseMode->forDelivery($delivery, $session), 404);
-        $this->store->assertCustomerScope($delivery, $session);
+        abort_if(in_array($delivery->status, self::TERMINAL_STATUSES, true), 409);
+
+        if ($delivery->started_at !== null || in_array($delivery->status, self::ACTIVE_STATUSES, true)) {
+            abort_unless(
+                $delivery->started_at !== null && in_array($delivery->status, self::ACTIVE_STATUSES, true),
+                409
+            );
+            $sessions = $delivery->relationLoaded('activeTrackingSessions')
+                ? $delivery->activeTrackingSessions
+                : $delivery->activeTrackingSessions()->with('startLocation')->get();
+            abort_unless($sessions->count() === 1, 409);
+            $session = $sessions->first();
+            abort_unless((string) $session->driver_id === (string) $delivery->assigned_driver_id, 409);
+            abort_unless($this->firebaseMode->forDelivery($delivery, $session), 404);
+            $this->store->assertCustomerScope($delivery, $session);
+        } else {
+            abort_unless($this->store->enabled(), 404);
+            // Self-heal the safe waiting status if an earlier best-effort mirror
+            // failed. This is still part of the single initial authorization.
+            $this->store->publishCustomerStatus($delivery);
+        }
 
         $now = now()->getTimestamp();
         $expiresAt = min($principal->expiresAt, $now + $this->customTokenTtlSeconds());

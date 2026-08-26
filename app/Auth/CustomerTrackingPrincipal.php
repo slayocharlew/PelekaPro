@@ -2,6 +2,7 @@
 
 namespace App\Auth;
 
+use App\Models\Delivery;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 final class CustomerTrackingPrincipal implements Authenticatable
@@ -11,7 +12,13 @@ final class CustomerTrackingPrincipal implements Authenticatable
         public readonly string $channelAlias,
         public readonly int $issuedAt,
         public readonly int $expiresAt,
+        private readonly Delivery $delivery,
     ) {}
+
+    public function authoritativeDelivery(): Delivery
+    {
+        return $this->delivery;
+    }
 
     public function getAuthIdentifierName(): string
     {

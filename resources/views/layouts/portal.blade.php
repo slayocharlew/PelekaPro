@@ -22,6 +22,8 @@
         <meta name="robots" content="noindex, nofollow">
 
         <title>@yield('title', 'Delivery portal') · PelekaPro</title>
+        <link rel="icon" href="/icons/pelekapro-portal-favicon-32.png" type="image/png" sizes="32x32">
+        <link rel="apple-touch-icon" href="/icons/pelekapro-portal-favicon-192.png" sizes="192x192">
 
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])

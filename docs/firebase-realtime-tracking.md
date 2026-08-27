@@ -135,6 +135,11 @@ replaces the previous value. `public_status` is a fixed lifecycle object updated
 for waiting, active, and terminal states; it is not an append-only GPS log. See
 `docs/tracking-performance.md` for emulator load testing.
 
+Human-readable Firebase ISO timestamps use East Africa Time and include the
+explicit `+03:00` offset. Numeric millisecond timestamps and ordering remain
+UTC epoch values, so this display representation does not change location
+ordering, credential expiry, or tracking authority.
+
 ## Local verification
 
 Firebase database rules run against the local emulator and never touch a cloud

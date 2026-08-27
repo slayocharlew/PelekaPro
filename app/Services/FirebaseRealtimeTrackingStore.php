@@ -7,6 +7,7 @@ use App\Exceptions\DeliveryWorkflowException;
 use App\Models\Delivery;
 use App\Models\DeliveryTrackingSession;
 use App\Models\User;
+use App\Support\EastAfricaTime;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -247,7 +248,7 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             'control/access_expires_at_ms' => now()->getTimestampMs(),
             'live' => null,
             'public_status/live_location_available' => false,
-            'public_status/updated_at' => now()->utc()->toISOString(),
+            'public_status/updated_at' => EastAfricaTime::iso8601(now()),
         ]);
 
         return [
@@ -274,7 +275,7 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             'live' => $state['live'],
             'public_status/tracking_active' => true,
             'public_status/live_location_available' => $state['live'] !== null,
-            'public_status/updated_at' => now()->utc()->toISOString(),
+            'public_status/updated_at' => EastAfricaTime::iso8601(now()),
         ]);
     }
 
@@ -490,7 +491,7 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             'sequence' => (int) ($payload['sequence'] ?? $recordedAt->getTimestampMs()),
             'latitude' => (float) $payload['latitude'],
             'longitude' => (float) $payload['longitude'],
-            'recorded_at' => $recordedAt->toISOString(),
+            'recorded_at' => EastAfricaTime::iso8601($recordedAt),
             'recorded_at_ms' => $recordedAt->getTimestampMs(),
             'received_at_ms' => now()->getTimestampMs(),
         ];
@@ -548,8 +549,8 @@ final class FirebaseRealtimeTrackingStore implements FirebaseTrackingStore
             'status' => (string) $delivery->status,
             'tracking_active' => $trackingActive,
             'live_location_available' => $liveLocationAvailable,
-            'occurred_at' => $occurredAt?->clone()->utc()->toISOString(),
-            'updated_at' => now()->utc()->toISOString(),
+            'occurred_at' => $occurredAt === null ? null : EastAfricaTime::iso8601($occurredAt),
+            'updated_at' => EastAfricaTime::iso8601(now()),
         ];
     }
 

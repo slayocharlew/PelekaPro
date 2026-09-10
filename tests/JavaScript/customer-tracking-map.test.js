@@ -55,7 +55,7 @@ test('the same pickup and destination reuse one road-route computation signature
     );
 });
 
-test('customer map computes one driving route and keeps Firebase points out of route planning', async () => {
+test('customer map computes one clearly layered driving route and keeps Firebase points out of route planning', async () => {
     const source = await import('node:fs/promises').then(({ readFile }) => readFile(
         new URL('../../resources/js/tracking/map-adapter.js', import.meta.url),
         'utf8'
@@ -65,6 +65,23 @@ test('customer map computes one driving route and keeps Firebase points out of r
     assert.match(source, /travelMode: 'DRIVING'/);
     assert.match(source, /fields: \['path'\]/);
     assert.match(source, /signature === this\.routeSignature/);
+    assert.match(source, /strokeColor: '#ffffff'[\s\S]*strokeWeight: 12/);
     assert.match(source, /strokeColor: '#ff6c37'/);
+    assert.match(source, /strokeColor: '#ff6c37'[\s\S]*strokeWeight: 7/);
+    assert.match(source, /\[\.\.\.routeBorder, \.\.\.routeForeground\]/);
     assert.equal(source.includes('recorded_at'), false);
+});
+
+test('terminal delivery state still allows the static pickup-to-destination route to finish rendering', async () => {
+    const source = await import('node:fs/promises').then(({ readFile }) => readFile(
+        new URL('../../resources/js/tracking/customer-tracking.js', import.meta.url),
+        'utf8'
+    ));
+    const renderRoute = source.slice(
+        source.indexOf('async renderRoute()'),
+        source.indexOf('renderStatus()', source.indexOf('async renderRoute()'))
+    );
+
+    assert.equal(renderRoute.includes('this.ended'), false);
+    assert.match(renderRoute, /this\.state\.routePlan !== routePlan/);
 });

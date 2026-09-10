@@ -165,16 +165,26 @@ export class CustomerTrackingMap {
                 const route = result.routes?.[0];
 
                 if (route) {
-                    this.routePolylines = route.createPolylines({
+                    const routeBorder = route.createPolylines({
+                        polylineOptions: {
+                            strokeColor: '#ffffff',
+                            strokeOpacity: 0.96,
+                            strokeWeight: 12,
+                            zIndex: 4,
+                        },
+                    });
+                    const routeForeground = route.createPolylines({
                         polylineOptions: {
                             strokeColor: '#ff6c37',
-                            strokeOpacity: 0.94,
-                            strokeWeight: 6,
+                            strokeOpacity: 0.98,
+                            strokeWeight: 7,
                             zIndex: 5,
                         },
                     });
+
+                    this.routePolylines = [...routeBorder, ...routeForeground];
                     this.routePolylines.forEach((polyline) => polyline.setMap(this.map));
-                    this.roadRouteVisible = this.routePolylines.length > 0;
+                    this.roadRouteVisible = routeForeground.length > 0;
                     path = route.path?.length ? route.path : path;
                 }
             } catch {

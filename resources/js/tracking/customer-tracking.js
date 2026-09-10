@@ -489,13 +489,13 @@ class CustomerTrackingPage {
 
         const mapAvailable = await this.map.initialize();
 
-        if (!mapAvailable || this.ended || this.state.routePlan !== routePlan) {
+        if (!mapAvailable || this.state.routePlan !== routePlan) {
             return;
         }
 
         const routeResult = await this.map.showRoute(routePlan);
 
-        if (this.ended || this.state.routePlan !== routePlan || !routeResult.visible) {
+        if (this.state.routePlan !== routePlan || !routeResult.visible) {
             return;
         }
 

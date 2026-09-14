@@ -23,7 +23,6 @@ class Delivery extends Model
         'delivery_number',
         'tracking_code',
         'public_tracking_token',
-        'delivery_pin',
         'status',
         'pickup_name',
         'pickup_phone',
@@ -113,6 +112,13 @@ class Delivery extends Model
         return $this->hasMany(DeliveryTrackingSession::class);
     }
 
+    public function activeTrackingSessions(): HasMany
+    {
+        return $this->hasMany(DeliveryTrackingSession::class)
+            ->where('status', 'active')
+            ->whereNull('stopped_at');
+    }
+
     public function trackingLocations(): HasMany
     {
         return $this->hasMany(DeliveryTrackingLocation::class);
@@ -141,5 +147,10 @@ class Delivery extends Model
     public function notificationLogs(): HasMany
     {
         return $this->hasMany(NotificationLog::class);
+    }
+
+    public function sourceCustomerDeliveryRequest(): HasOne
+    {
+        return $this->hasOne(CustomerDeliveryRequest::class, 'converted_delivery_id');
     }
 }

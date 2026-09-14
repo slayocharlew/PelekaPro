@@ -23,7 +23,6 @@ class CompleteDeliveryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'delivery_pin' => ['nullable', 'string', 'max:10'],
             'receiver_name' => ['nullable', 'string', 'max:255'],
             'receiver_phone' => ['nullable', 'string', 'max:255'],
             'proof_type' => ['nullable', 'required_with:proof_file', Rule::in(['photo', 'signature'])],
@@ -47,14 +46,6 @@ class CompleteDeliveryRequest extends FormRequest
                 return;
             }
 
-            if ($delivery->delivery_pin !== null && ! $this->filled('delivery_pin')) {
-                $validator->errors()->add('delivery_pin', 'The delivery PIN is required.');
-            }
-
-            if ($delivery->delivery_pin !== null && $this->filled('delivery_pin') && ! hash_equals((string) $delivery->delivery_pin, (string) $this->input('delivery_pin'))) {
-                $validator->errors()->add('delivery_pin', 'The delivery PIN is incorrect.');
-            }
-
             $payment = $delivery->payment()->first();
             $paymentMethod = $payment?->payment_method ?? $this->paymentMethodFor($delivery->payment_method);
             $expectedAmount = (float) ($payment?->expected_amount ?? $delivery->amount_to_collect);
@@ -70,6 +61,11 @@ class CompleteDeliveryRequest extends FormRequest
 
             if ($paymentNotRequired && $this->filled('collected_amount') && (float) $this->input('collected_amount') > 0) {
                 $validator->errors()->add('collected_amount', 'This delivery does not require payment collection.');
+            }
+
+            if ($this->filled('delivered_latitude') xor $this->filled('delivered_longitude')) {
+                $validator->errors()->add('delivered_latitude', 'Delivered latitude and longitude must be provided together.');
+                $validator->errors()->add('delivered_longitude', 'Delivered latitude and longitude must be provided together.');
             }
         });
     }

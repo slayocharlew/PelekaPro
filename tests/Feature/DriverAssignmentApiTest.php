@@ -289,7 +289,6 @@ class DriverAssignmentApiTest extends TestCase
             'delivery_number' => 'PD-TEST-'.Str::upper(Str::random(8)),
             'tracking_code' => 'TRK-'.Str::upper(Str::random(10)),
             'public_tracking_token' => Str::random(80),
-            'delivery_pin' => (string) random_int(100000, 999999),
             'status' => $status,
             'dropoff_name' => $customer->name,
             'dropoff_phone' => $customer->phone,

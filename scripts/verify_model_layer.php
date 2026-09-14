@@ -6,6 +6,8 @@ use App\Models\CashReconciliation;
 use App\Models\CashReconciliationItem;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Models\CustomerDeliveryRequest;
+use App\Models\CustomerDeliveryRequestItem;
 use App\Models\Delivery;
 use App\Models\DeliveryFailure;
 use App\Models\DeliveryItem;
@@ -43,6 +45,8 @@ $models = [
     User::class,
     Customer::class,
     CustomerAddress::class,
+    CustomerDeliveryRequest::class,
+    CustomerDeliveryRequestItem::class,
     DriverProfile::class,
     Delivery::class,
     DeliveryItem::class,

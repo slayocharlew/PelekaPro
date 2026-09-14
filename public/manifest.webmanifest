@@ -1,0 +1,24 @@
+{
+    "name": "PelekaPro Delivery Tracking",
+    "short_name": "PelekaPro",
+    "description": "Secure live delivery tracking for PelekaPro customers.",
+    "start_url": "/tracking",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#f5f5f5",
+    "theme_color": "#ff6c37",
+    "icons": [
+        {
+            "src": "/icons/pelekapro-mark-v2-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icons/pelekapro-mark-v2-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

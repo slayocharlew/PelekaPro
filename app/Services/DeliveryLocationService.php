@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Events\CustomerDeliveryLiveLocationUpdated;
+use App\Events\DeliveryLiveLocationUpdated;
 use App\Exceptions\DeliveryWorkflowException;
 use App\Models\Delivery;
 use App\Models\DeliveryTrackingLocation;
-use App\Models\DeliveryTrackingSession;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,9 +15,11 @@ use Throwable;
 
 class DeliveryLocationService
 {
-    private const ACTIVE_STATUSES = ['on_the_way', 'arrived'];
-
-    public function __construct(private readonly LiveDeliveryLocationStore $liveLocationStore) {}
+    public function __construct(
+        private readonly LiveDeliveryLocationStore $liveLocationStore,
+        private readonly CustomerTrackingChannelAlias $customerChannelAliases,
+        private readonly DeliveryTrackingAuthority $authority,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -25,13 +28,9 @@ class DeliveryLocationService
     public function record(Delivery $delivery, User $driver, array $payload): array
     {
         [$location, $created, $lockedDelivery, $activeSession] = DB::transaction(function () use ($delivery, $driver, $payload): array {
-            $lockedDelivery = Delivery::query()
-                ->whereKey($delivery->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $this->assertCanRecordLocation($lockedDelivery, $driver);
-            $activeSession = $this->activeSession($lockedDelivery, $driver);
+            $context = $this->authority->activeContext($delivery, $driver, true);
+            $lockedDelivery = $context['delivery'];
+            $activeSession = $context['session'];
             $recordedAt = Carbon::parse($payload['recorded_at']);
 
             if ($activeSession->started_at === null || $recordedAt->lessThan($activeSession->started_at)) {
@@ -70,57 +69,41 @@ class DeliveryLocationService
             return [$location, true, $lockedDelivery, $activeSession];
         });
 
+        $latestLocationUpdated = false;
+
         try {
-            $this->liveLocationStore->storeLatest($lockedDelivery, $activeSession, $location);
-        } catch (Throwable) {
+            $latestLocationUpdated = $this->liveLocationStore->storeLatest($lockedDelivery, $activeSession, $location);
+        } catch (Throwable $exception) {
             Log::warning('Unable to update Redis live delivery location.', [
                 'delivery_id' => $lockedDelivery->getKey(),
                 'tracking_session_id' => $activeSession->getKey(),
                 'location_id' => $location->getKey(),
+                'exception_class' => $exception::class,
             ]);
+        }
+
+        if ($created && $latestLocationUpdated) {
+            $this->broadcastLatestLocation($lockedDelivery, $location);
         }
 
         return [$location, $created];
     }
 
-    private function assertCanRecordLocation(Delivery $delivery, User $driver): void
+    private function broadcastLatestLocation(Delivery $delivery, DeliveryTrackingLocation $location): void
     {
-        $driver->loadMissing('driverProfile');
-
-        if (! $driver->isDriver()
-            || $driver->status !== 'active'
-            || ! $driver->driverProfile
-            || ! in_array($driver->driverProfile->current_status, ['available', 'assigned', 'on_delivery'], true)
-            || (string) $delivery->assigned_driver_id !== (string) $driver->getKey()
-            || (string) $delivery->business_id !== (string) $driver->business_id
-        ) {
-            throw new DeliveryWorkflowException('You are not allowed to record locations for this delivery.', 403);
+        try {
+            event(DeliveryLiveLocationUpdated::fromPersistedLocation($delivery, $location));
+            event(CustomerDeliveryLiveLocationUpdated::fromPersistedLocation(
+                $delivery,
+                $location,
+                $this->customerChannelAliases
+            ));
+        } catch (Throwable $exception) {
+            Log::warning('Unable to broadcast live delivery location.', [
+                'delivery_id' => $delivery->getKey(),
+                'location_id' => $location->getKey(),
+                'exception_class' => $exception::class,
+            ]);
         }
-
-        if ($delivery->started_at === null || ! in_array($delivery->status, self::ACTIVE_STATUSES, true)) {
-            throw new DeliveryWorkflowException('Location tracking is not active for this delivery');
-        }
-    }
-
-    private function activeSession(Delivery $delivery, User $driver): DeliveryTrackingSession
-    {
-        $activeSessions = DeliveryTrackingSession::query()
-            ->where('delivery_id', $delivery->getKey())
-            ->where('status', 'active')
-            ->whereNull('stopped_at')
-            ->lockForUpdate()
-            ->get();
-
-        if ($activeSessions->count() !== 1) {
-            throw new DeliveryWorkflowException('Location tracking is not active for this delivery');
-        }
-
-        $session = $activeSessions->first();
-
-        if ((string) $session->driver_id !== (string) $driver->getKey()) {
-            throw new DeliveryWorkflowException('You are not allowed to record locations for this delivery.', 403);
-        }
-
-        return $session;
     }
 }

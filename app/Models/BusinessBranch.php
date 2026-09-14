@@ -51,4 +51,20 @@ class BusinessBranch extends Model
     {
         return $this->hasMany(Delivery::class, 'branch_id');
     }
+
+    public function pickupAddress(): ?string
+    {
+        if (filled($this->address)) {
+            return $this->address;
+        }
+
+        $parts = collect([
+            $this->street,
+            $this->ward,
+            $this->district,
+            $this->region,
+        ])->filter()->unique()->values();
+
+        return $parts->isEmpty() ? null : $parts->implode(', ');
+    }
 }

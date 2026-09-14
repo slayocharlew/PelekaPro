@@ -125,6 +125,11 @@ class User extends Authenticatable
         return $this->hasMany(Delivery::class, 'created_by');
     }
 
+    public function createdCustomerDeliveryRequests(): HasMany
+    {
+        return $this->hasMany(CustomerDeliveryRequest::class, 'created_by');
+    }
+
     public function assignedDeliveries(): HasMany
     {
         return $this->hasMany(Delivery::class, 'assigned_driver_id');

@@ -15,8 +15,6 @@ class DeliveryProof extends Model
         'driver_id',
         'recipient_name',
         'recipient_phone',
-        'pin_verified',
-        'entered_pin',
         'photo_path',
         'signature_path',
         'delivered_latitude',
@@ -26,7 +24,6 @@ class DeliveryProof extends Model
     ];
 
     protected $casts = [
-        'pin_verified' => 'boolean',
         'delivered_latitude' => 'decimal:7',
         'delivered_longitude' => 'decimal:7',
         'delivered_at' => 'datetime',

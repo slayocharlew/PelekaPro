@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class DeliveryTrackingSession extends Model
 {
@@ -40,5 +41,11 @@ class DeliveryTrackingSession extends Model
     public function locations(): HasMany
     {
         return $this->hasMany(DeliveryTrackingLocation::class, 'tracking_session_id');
+    }
+
+    public function startLocation(): HasOne
+    {
+        return $this->hasOne(DeliveryTrackingLocation::class, 'tracking_session_id')
+            ->where('point_type', 'start');
     }
 }

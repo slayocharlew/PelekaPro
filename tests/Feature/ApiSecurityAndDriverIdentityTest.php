@@ -123,7 +123,6 @@ class ApiSecurityAndDriverIdentityTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivery->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertOk();
@@ -145,7 +144,6 @@ class ApiSecurityAndDriverIdentityTest extends TestCase
         $delivery = $this->deliveryFor($business, $driver, $customer);
         $delivery->proof()->create([
             'driver_id' => $driver->id,
-            'pin_verified' => true,
             'photo_path' => 'delivery-proofs/private-photo.jpg',
             'signature_path' => 'delivery-proofs/private-signature.png',
         ]);
@@ -241,7 +239,6 @@ class ApiSecurityAndDriverIdentityTest extends TestCase
             'delivery_number' => 'PD-TEST-'.Str::upper(Str::random(8)),
             'tracking_code' => 'TRK-'.Str::upper(Str::random(10)),
             'public_tracking_token' => Str::random(80),
-            'delivery_pin' => '123456',
             'status' => 'assigned',
             'pickup_name' => 'Main Shop',
             'pickup_phone' => '255700000001',

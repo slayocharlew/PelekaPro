@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\DeliveryLiveLocationUpdated;
 use App\Models\Business;
 use App\Models\Customer;
 use App\Models\Delivery;
@@ -13,9 +14,11 @@ use App\Models\FailedDeliveryReason;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\LiveDeliveryLocationStore;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Mockery;
@@ -179,6 +182,7 @@ class RedisLatestLocationStateTest extends TestCase
         $lock = Cache::store('array')->lock($liveStore->keyForDelivery($delivery).':lock', 5);
 
         $this->assertTrue($lock->get());
+        Event::fake([DeliveryLiveLocationUpdated::class]);
         Log::spy();
 
         try {
@@ -193,11 +197,13 @@ class RedisLatestLocationStateTest extends TestCase
         $session = $delivery->trackingSessions()->where('status', 'active')->firstOrFail();
 
         $this->assertNull($liveStore->getLatest($delivery));
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
         Log::shouldHaveReceived('warning')
             ->with('Unable to update Redis live delivery location.', [
                 'delivery_id' => $delivery->id,
                 'tracking_session_id' => $session->id,
                 'location_id' => $location->id,
+                'exception_class' => LockTimeoutException::class,
             ])
             ->once();
     }
@@ -271,7 +277,6 @@ class RedisLatestLocationStateTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivered->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertOk();
@@ -299,6 +304,7 @@ class RedisLatestLocationStateTest extends TestCase
         $failingStore = Mockery::mock(LiveDeliveryLocationStore::class);
         $failingStore->shouldReceive('storeLatest')->once()->andThrow(new RuntimeException('Redis unavailable'));
         $this->app->instance(LiveDeliveryLocationStore::class, $failingStore);
+        Event::fake([DeliveryLiveLocationUpdated::class]);
         Log::spy();
 
         $this->actingAs($driver)
@@ -310,6 +316,7 @@ class RedisLatestLocationStateTest extends TestCase
             'driver_id' => $driver->id,
         ]);
         $this->assertNull(Cache::store('array')->get("pelekapro:delivery:{$delivery->id}:live-location"));
+        Event::assertNotDispatched(DeliveryLiveLocationUpdated::class);
 
         Log::shouldHaveReceived('warning')
             ->with('Unable to update Redis live delivery location.', Mockery::type('array'))
@@ -332,7 +339,6 @@ class RedisLatestLocationStateTest extends TestCase
 
         $this->actingAs($driver)
             ->postJson("/api/driver/deliveries/{$delivered->id}/deliver", [
-                'delivery_pin' => '123456',
                 'collected_amount' => 5000,
             ])
             ->assertOk();
@@ -433,7 +439,6 @@ class RedisLatestLocationStateTest extends TestCase
             'delivery_number' => 'PD-TEST-'.Str::upper(Str::random(8)),
             'tracking_code' => 'TRK-'.Str::upper(Str::random(10)),
             'public_tracking_token' => Str::random(80),
-            'delivery_pin' => '123456',
             'status' => 'assigned',
             'pickup_name' => 'Main Shop',
             'pickup_phone' => '255700000001',

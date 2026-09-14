@@ -6,6 +6,7 @@
         <meta name="robots" content="noindex, nofollow, noarchive">
         <meta name="referrer" content="no-referrer">
         <title>Delivery request unavailable · PelekaPro</title>
+        @include('partials.pelekapro-icons')
         @fonts
         @vite(['resources/css/app.css'])
     </head>

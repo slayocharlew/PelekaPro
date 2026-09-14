@@ -390,6 +390,7 @@ class CustomerTrackingPage {
             return;
         }
 
+        const hadLiveLocation = this.state.location !== null;
         const result = applyLocationEvent(this.state, location);
 
         if (result.requiresSnapshot) {
@@ -404,6 +405,10 @@ class CustomerTrackingPage {
 
         this.state = result.state;
         this.renderLocation();
+
+        if (!hadLiveLocation) {
+            this.renderRoute();
+        }
     }
 
     handleFirebaseStatusEvent(payload) {
@@ -493,7 +498,10 @@ class CustomerTrackingPage {
             return;
         }
 
-        const routeResult = await this.map.showRoute(routePlan);
+        const liveOrigin = this.state.trackingActive && locationIsFresh(this.state.location)
+            ? this.state.location
+            : null;
+        const routeResult = await this.map.showRoute(routePlan, liveOrigin);
 
         if (this.state.routePlan !== routePlan || !routeResult.visible) {
             return;
@@ -502,7 +510,11 @@ class CustomerTrackingPage {
         this.elements.mapPlaceholder.hidden = true;
         this.elements.routeNotice.hidden = false;
 
-        if (routePlan.origin && routePlan.destination) {
+        if (routeResult.liveRoute) {
+            this.elements.routeNotice.textContent = routeResult.roadRoute
+                ? 'Live rider → Customer destination'
+                : 'The rider and destination are shown. The remaining road route is temporarily unavailable.';
+        } else if (routePlan.origin && routePlan.destination) {
             this.elements.routeNotice.textContent = routeResult.roadRoute
                 ? 'Pickup → Customer destination'
                 : 'Pickup and destination are shown. The road route is temporarily unavailable.';
@@ -574,8 +586,19 @@ class CustomerTrackingPage {
         }
 
         if (mapAvailable) {
-            this.map.showLocation(location);
+            this.map.showLocation(location, this.state.routePlan.destination);
             this.elements.mapPlaceholder.hidden = true;
+
+            this.map.refreshRemainingRoute(this.state.routePlan, location).then((refreshed) => {
+                if (refreshed
+                    && !this.ended
+                    && this.state.location === location
+                    && this.state.routePlan.destination
+                ) {
+                    this.elements.routeNotice.hidden = false;
+                    this.elements.routeNotice.textContent = 'Live rider → Customer destination';
+                }
+            });
         } else {
             this.showMapMessage(
                 'Live position received',

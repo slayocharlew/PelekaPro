@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     distanceInMetres,
+    distanceToPathInMetres,
     interpolatePosition,
+    markerAnimationDuration,
     shouldAnimateMarker,
+    shouldRefreshRemainingRoute,
 } from '../../resources/js/tracking/map-math.js';
 import { routePlanSignature } from '../../resources/js/tracking/map-adapter.js';
 
@@ -36,6 +39,58 @@ test('identical points do not start duplicate marker animations', () => {
     assert.equal(shouldAnimateMarker(darEsSalaam, darEsSalaam, false), false);
 });
 
+test('marker animation follows the GPS cadence without lagging indefinitely', () => {
+    assert.equal(markerAnimationDuration(
+        '2026-09-10T10:00:00.000Z',
+        '2026-09-10T10:00:05.000Z',
+        25
+    ), 4_500);
+    assert.equal(markerAnimationDuration(
+        '2026-09-10T10:00:00.000Z',
+        '2026-09-10T10:01:00.000Z',
+        10
+    ), 750);
+    assert.equal(markerAnimationDuration(
+        '2026-09-10T10:00:00.000Z',
+        '2026-09-10T10:00:20.000Z',
+        500
+    ), 4_800);
+});
+
+test('remaining road route refreshes only after a meaningful off-route deviation', () => {
+    const routeOrigin = { latitude: -6.7924, longitude: 39.2083 };
+    const routePath = [
+        routeOrigin,
+        { latitude: -6.7924, longitude: 39.2183 },
+    ];
+    const onRoute = { latitude: -6.7924, longitude: 39.2143 };
+    const offRoute = { latitude: -6.7904, longitude: 39.2143 };
+
+    assert.ok(distanceToPathInMetres(onRoute, routePath) < 1);
+    assert.ok(distanceToPathInMetres(offRoute, routePath) > 200);
+    assert.equal(shouldRefreshRemainingRoute({
+        location: onRoute,
+        routeOrigin,
+        routePath,
+        lastRequestedAt: 0,
+        now: 61_000,
+    }), false);
+    assert.equal(shouldRefreshRemainingRoute({
+        location: offRoute,
+        routeOrigin,
+        routePath,
+        lastRequestedAt: 0,
+        now: 59_000,
+    }), false);
+    assert.equal(shouldRefreshRemainingRoute({
+        location: offRoute,
+        routeOrigin,
+        routePath,
+        lastRequestedAt: 0,
+        now: 61_000,
+    }), true);
+});
+
 test('the same pickup and destination reuse one road-route computation signature', () => {
     const routePlan = {
         origin: { latitude: -6.7755, longitude: 39.24 },
@@ -55,7 +110,7 @@ test('the same pickup and destination reuse one road-route computation signature
     );
 });
 
-test('customer map computes one clearly layered driving route and keeps Firebase points out of route planning', async () => {
+test('customer map computes a layered remaining route without recalculating on every Firebase point', async () => {
     const source = await import('node:fs/promises').then(({ readFile }) => readFile(
         new URL('../../resources/js/tracking/map-adapter.js', import.meta.url),
         'utf8'
@@ -69,6 +124,7 @@ test('customer map computes one clearly layered driving route and keeps Firebase
     assert.match(source, /strokeColor: '#ff6c37'/);
     assert.match(source, /strokeColor: '#ff6c37'[\s\S]*strokeWeight: 7/);
     assert.match(source, /\[\.\.\.routeBorder, \.\.\.routeForeground\]/);
+    assert.match(source, /shouldRefreshRemainingRoute/);
     assert.equal(source.includes('recorded_at'), false);
 });
 

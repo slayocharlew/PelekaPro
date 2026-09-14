@@ -8,8 +8,7 @@
         <meta name="theme-color" content="#ff6c37">
         <meta name="robots" content="noindex, nofollow">
         <title>Sign in · PelekaPro</title>
-        <link rel="icon" href="/icons/pelekapro-portal-favicon-32.png" type="image/png" sizes="32x32">
-        <link rel="apple-touch-icon" href="/icons/pelekapro-portal-favicon-192.png" sizes="192x192">
+        @include('partials.pelekapro-icons')
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
@@ -20,11 +19,8 @@
                 <div class="portal-login__showcase-orb portal-login__showcase-orb--two" aria-hidden="true"></div>
 
                 <div class="portal-login__showcase-brand">
-                    <img src="/icons/pelekapro-portal-favicon-192.png" alt="" width="48" height="48">
-                    <div>
-                        <strong>Peleka<span>Pro</span></strong>
-                        <small>Business delivery portal</small>
-                    </div>
+                    <img src="/icons/pelekapro-brand-v2.png" alt="PelekaPro" width="252" height="84">
+                    <span class="sr-only">Business delivery portal</span>
                 </div>
 
                 <div class="portal-login__illustration" aria-hidden="true">
@@ -90,11 +86,8 @@
             <section class="portal-login__panel" aria-labelledby="login-heading">
                 <div class="portal-login__card">
                     <div class="portal-login__brand">
-                        <img src="/icons/pelekapro-portal-favicon-192.png" alt="" width="60" height="60">
-                        <div>
-                            <strong>Peleka<span>Pro</span></strong>
-                            <small>Business delivery portal</small>
-                        </div>
+                        <img src="/icons/pelekapro-brand-v2.png" alt="PelekaPro" width="270" height="90">
+                        <span class="sr-only">Business delivery portal</span>
                     </div>
 
                     <div class="portal-login__heading">

@@ -9,7 +9,7 @@
 
         <title>Tracking session unavailable · PelekaPro</title>
 
-        <link rel="icon" href="/icons/pelekapro-mark.svg" type="image/svg+xml">
+        @include('partials.pelekapro-icons')
 
         @fonts
         @vite('resources/css/app.css')

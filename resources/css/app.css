@@ -59,41 +59,14 @@
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: 0.7rem;
     color: inherit;
     text-decoration: none;
 }
 
-.portal-brand__mark {
-    display: grid;
-    width: 40px;
-    height: 40px;
-    place-items: center;
-    border-radius: 12px;
-    color: var(--portal-ink);
-    background: var(--portal-primary);
-    box-shadow: 0 8px 20px rgb(255 108 55 / 24%);
-    font-size: 1.18rem;
-    font-weight: 800;
-}
-
-.portal-brand strong,
-.portal-brand small {
+.portal-brand img {
     display: block;
-}
-
-.portal-brand strong {
-    font-size: 1.05rem;
-    line-height: 1.2;
-}
-
-.portal-brand small {
-    margin-top: 0.12rem;
-    color: var(--portal-muted);
-    font-size: 0.68rem;
-    font-weight: 650;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    width: 180px;
+    height: auto;
 }
 
 .portal-nav {
@@ -1002,36 +975,13 @@
 .portal-login__brand {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
 }
 
 .portal-login__showcase-brand img,
 .portal-login__brand img {
-    flex: 0 0 auto;
-    border-radius: 16px;
-    box-shadow: 0 12px 28px rgb(199 68 20 / 15%);
-}
-
-.portal-login__showcase-brand strong,
-.portal-login__brand strong {
     display: block;
-    color: var(--portal-ink);
-    font-size: 1.2rem;
-    letter-spacing: -0.03em;
-}
-
-.portal-login__showcase-brand strong span,
-.portal-login__brand strong span {
-    display: inline;
-    color: var(--portal-primary);
-}
-
-.portal-login__showcase-brand small,
-.portal-login__brand small {
-    display: block;
-    margin-top: 0.12rem;
-    color: var(--portal-muted);
-    font-size: 0.68rem;
+    width: min(252px, 100%);
+    height: auto;
 }
 
 .portal-login__illustration {
@@ -1084,7 +1034,10 @@
 
 .portal-login__brand {
     justify-content: center;
-    text-align: left;
+}
+
+.portal-login__brand img {
+    width: min(270px, 100%);
 }
 
 .portal-login__heading {
@@ -1170,12 +1123,7 @@
         padding: 1.1rem 1.2rem;
     }
 
-    .portal-login__showcase-brand img {
-        width: 40px;
-        height: 40px;
-    }
-
-    .portal-login__showcase-brand small,
+    .portal-login__showcase-brand,
     .portal-login__showcase-copy > p:last-child,
     .portal-login__showcase-copy .portal-eyebrow {
         display: none;
@@ -1201,8 +1149,7 @@
     }
 
     .portal-login__brand img {
-        width: 52px;
-        height: 52px;
+        width: min(230px, 84vw);
     }
 }
 
@@ -1229,6 +1176,10 @@
     .portal-header__inner {
         min-height: 64px;
         gap: 0.6rem;
+    }
+
+    .portal-brand img {
+        width: 150px;
     }
 
     .portal-nav-toggle {
@@ -1428,44 +1379,12 @@
 .tracking-brand {
     display: inline-flex;
     align-items: center;
-    gap: 0.72rem;
 }
 
-.tracking-brand__mark {
-    display: grid;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    overflow: hidden;
-    border-radius: 13px;
-    color: #fff;
-    background: var(--tracking-primary);
-    box-shadow: 0 8px 22px rgb(255 108 55 / 25%);
-}
-
-.tracking-brand__mark svg {
-    width: 35px;
-    height: 35px;
-}
-
-.tracking-brand strong,
-.tracking-brand small {
+.tracking-brand__logo {
     display: block;
-}
-
-.tracking-brand strong {
-    font-size: 1.12rem;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-}
-
-.tracking-brand small {
-    margin-top: 0.05rem;
-    color: var(--tracking-muted);
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    width: 195px;
+    height: auto;
 }
 
 .connection-pill {
@@ -2010,8 +1929,21 @@
 }
 
 .tracking-vehicle-marker-shell {
+    position: relative;
+    display: grid;
+    place-items: center;
     border: 0;
     background: transparent;
+}
+
+.tracking-vehicle-marker-shell::before {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    border: 2px solid rgb(255 108 55 / 42%);
+    border-radius: 50%;
+    content: '';
+    animation: tracking-rider-pulse 1.8s ease-out infinite;
 }
 
 .tracking-vehicle-marker {
@@ -2027,6 +1959,7 @@
     box-shadow: 0 8px 24px rgb(255 108 55 / 38%);
     transform: rotate(var(--tracking-heading, 0deg));
     transform-origin: 50% 50%;
+    transition: transform 420ms linear;
 }
 
 .tracking-vehicle-marker::after {
@@ -2043,6 +1976,43 @@
 .tracking-vehicle-marker svg {
     width: 25px;
     height: 25px;
+}
+
+.tracking-vehicle-marker-label {
+    position: absolute;
+    top: 51px;
+    border: 1px solid rgb(255 108 55 / 22%);
+    border-radius: 999px;
+    padding: 0.22rem 0.5rem;
+    color: #442b21;
+    background: rgb(255 255 255 / 96%);
+    box-shadow: 0 5px 14px rgb(70 40 28 / 15%);
+    font-size: 0.66rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+@keyframes tracking-rider-pulse {
+    from {
+        opacity: 0.8;
+        transform: scale(0.78);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.55);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tracking-vehicle-marker-shell::before {
+        animation: none;
+    }
+
+    .tracking-vehicle-marker {
+        transition: none;
+    }
 }
 
 .tracking-route-marker {
@@ -2086,14 +2056,8 @@
         min-height: 68px;
     }
 
-    .tracking-brand__mark {
-        width: 38px;
-        height: 38px;
-        border-radius: 12px;
-    }
-
-    .tracking-brand small {
-        display: none;
+    .tracking-brand__logo {
+        width: 148px;
     }
 
     .connection-pill {

@@ -1,9 +1,10 @@
-const STATIC_CACHE = 'pelekapro-static-v1';
+const STATIC_CACHE = 'pelekapro-static-v2';
 const OWNED_STATIC_ASSETS = [
     '/manifest.webmanifest',
-    '/icons/pelekapro-mark.svg',
-    '/icons/pelekapro-192.png',
-    '/icons/pelekapro-512.png',
+    '/icons/pelekapro-brand-v2.png',
+    '/icons/pelekapro-mark-v2-32.png',
+    '/icons/pelekapro-mark-v2-192.png',
+    '/icons/pelekapro-mark-v2-512.png',
 ];
 const PRIVATE_PATHS = [
     /^\/track(?:\/|$)/,

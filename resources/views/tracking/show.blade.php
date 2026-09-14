@@ -12,8 +12,7 @@
         <title>Track your delivery · PelekaPro</title>
 
         <link rel="manifest" href="/manifest.webmanifest">
-        <link rel="icon" href="/icons/pelekapro-mark.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/icons/pelekapro-192.png">
+        @include('partials.pelekapro-icons')
 
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])

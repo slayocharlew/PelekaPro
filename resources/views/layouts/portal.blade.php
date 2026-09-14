@@ -22,8 +22,7 @@
         <meta name="robots" content="noindex, nofollow">
 
         <title>@yield('title', 'Delivery portal') · PelekaPro</title>
-        <link rel="icon" href="/icons/pelekapro-portal-favicon-32.png" type="image/png" sizes="32x32">
-        <link rel="apple-touch-icon" href="/icons/pelekapro-portal-favicon-192.png" sizes="192x192">
+        @include('partials.pelekapro-icons')
 
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -35,11 +34,7 @@
             <header class="portal-header">
                 <div class="portal-container portal-header__inner">
                     <a class="portal-brand" href="{{ route('portal.deliveries.index') }}" aria-label="PelekaPro delivery portal">
-                        <span class="portal-brand__mark" aria-hidden="true">P</span>
-                        <span>
-                            <strong>PelekaPro</strong>
-                            <small>Delivery control</small>
-                        </span>
+                        <img src="/icons/pelekapro-brand-v2.png" alt="" width="180" height="60">
                     </a>
 
                     <button class="portal-nav-toggle" type="button" data-portal-nav-toggle aria-expanded="false" aria-controls="portal-navigation">

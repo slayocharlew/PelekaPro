@@ -11,6 +11,8 @@
 
         <title>Provide delivery details · PelekaPro</title>
 
+        @include('partials.pelekapro-icons')
+
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>

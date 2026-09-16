@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\CustomerDeliveryRequestController;
 use App\Http\Controllers\CustomerTrackingController;
+use App\Http\Controllers\MapUsageController;
 use App\Http\Controllers\Portal\BusinessController as PortalBusinessController;
 use App\Http\Controllers\Portal\BusinessSettingsController as PortalBusinessSettingsController;
 use App\Http\Controllers\Portal\CustomerDeliveryRequestController as PortalCustomerDeliveryRequestController;
 use App\Http\Controllers\Portal\DeliveryController as PortalDeliveryController;
 use App\Http\Controllers\Portal\DriverController as PortalDriverController;
+use App\Http\Controllers\Portal\MapUsageController as PortalMapUsageController;
 use App\Http\Controllers\PortalAuthController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -50,7 +52,13 @@ Route::middleware(['auth:web', 'active.web.user', 'role:super_admin,business_own
         Route::get('/settings', [PortalBusinessSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings/shop-location', [PortalBusinessSettingsController::class, 'update'])->name('settings.shop-location.update');
 
+        Route::post('/map-usage/{surface}', [MapUsageController::class, 'store'])
+            ->where('surface', 'shop_location|business_onboarding')
+            ->middleware(['signed:relative', 'throttle:map-usage'])
+            ->name('map-usage.store');
+
         Route::middleware('role:super_admin')->group(function (): void {
+            Route::get('/map-usage', [PortalMapUsageController::class, 'index'])->name('map-usage.index');
             Route::get('/businesses', [PortalBusinessController::class, 'index'])->name('businesses.index');
             Route::get('/businesses/create', [PortalBusinessController::class, 'create'])->name('businesses.create');
             Route::post('/businesses', [PortalBusinessController::class, 'store'])->name('businesses.store');
@@ -81,6 +89,11 @@ Route::get('/tracking/session', [CustomerTrackingController::class, 'show'])
         'customer.tracking',
     ])
     ->name('customer.tracking.session.show');
+
+Route::post('/tracking/map-usage', [MapUsageController::class, 'store'])
+    ->defaults('surface', 'customer_tracking')
+    ->middleware(['customer.tracking.headers', 'signed:relative', 'throttle:map-usage'])
+    ->name('customer.tracking.map-usage');
 
 Route::post('/tracking/firebase-credentials', [CustomerTrackingController::class, 'firebaseCredentials'])
     ->middleware([
@@ -113,6 +126,11 @@ Route::post('/delivery-request/session', [CustomerDeliveryRequestController::cla
         'customer.delivery-request',
     ])
     ->name('customer.delivery-request.session.store');
+
+Route::post('/delivery-request/map-usage', [MapUsageController::class, 'store'])
+    ->defaults('surface', 'customer_delivery_request')
+    ->middleware(['customer.delivery-request.headers', 'signed:relative', 'throttle:map-usage'])
+    ->name('customer.delivery-request.map-usage');
 
 Route::delete('/delivery-request/session', [CustomerDeliveryRequestController::class, 'destroy'])
     ->middleware([

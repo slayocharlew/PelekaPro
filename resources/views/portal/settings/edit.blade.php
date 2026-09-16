@@ -91,7 +91,7 @@
                     @endif
                 </p>
             </div>
-            <div class="portal-location-map" data-branch-location-map role="application" tabindex="0" aria-label="Select main shop location" aria-describedby="branch-location-status"></div>
+            <div class="portal-location-map" data-branch-location-map data-map-usage-url="{{ app(\App\Services\MapUsageService::class)->reportingUrl('shop_location') }}" role="application" tabindex="0" aria-label="Select main shop location" aria-describedby="branch-location-status"></div>
             <input name="branch[latitude]" type="hidden" value="{{ old('branch.latitude', $branch->latitude) }}" data-branch-latitude>
             <input name="branch[longitude]" type="hidden" value="{{ old('branch.longitude', $branch->longitude) }}" data-branch-longitude>
             @error('branch.latitude') <p class="portal-field__error portal-location-error">{{ $message }}</p> @enderror

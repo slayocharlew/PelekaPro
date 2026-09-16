@@ -22,20 +22,23 @@ function normalizeHeading(heading) {
     return ((heading % 360) + 360) % 360;
 }
 
-function vehicleMarkerContent(heading) {
+function vehicleMarkerContent(heading, driver) {
     const container = document.createElement('div');
 
     container.className = 'tracking-vehicle-marker-shell';
     container.innerHTML = `
         <span class="tracking-vehicle-marker" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M7 17.5V10.8L9.1 5.5H14.9L17 10.8V17.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M7 11H17M8.5 15H8.51M15.5 15H15.51" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="8" cy="23.5" r="4" stroke="currentColor" stroke-width="2.2"/>
+                <circle cx="24" cy="23.5" r="4" stroke="currentColor" stroke-width="2.2"/>
+                <circle cx="17.5" cy="6.5" r="3" fill="currentColor"/>
+                <path d="m16.5 10-3 7.2 4.8 3.4 3.1-7.6M13.5 17.2 8 23.5h8.2l3.2-7.6H24l-2.2-4.1h3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
         </span>
         <span class="tracking-vehicle-marker-label" aria-hidden="true">Rider</span>
     `;
     setMarkerHeading(container, heading);
+    setMarkerDriver(container, driver);
 
     return container;
 }
@@ -44,6 +47,17 @@ function setMarkerHeading(container, heading) {
     container
         .querySelector('.tracking-vehicle-marker')
         ?.style.setProperty('--tracking-heading', `${normalizeHeading(heading)}deg`);
+}
+
+function setMarkerDriver(container, driver) {
+    const label = container.querySelector('.tracking-vehicle-marker-label');
+
+    if (!label) {
+        return;
+    }
+
+    const firstName = driver?.name?.trim().split(/\s+/)[0];
+    label.textContent = firstName || 'Rider';
 }
 
 function endpointMarkerContent(kind) {
@@ -275,7 +289,7 @@ export class CustomerTrackingMap {
         this.clearRoute();
     }
 
-    showLocation(location, routeDestination = null) {
+    showLocation(location, routeDestination = null, driver = null) {
         if (!this.map || !this.AdvancedMarkerElement) {
             return false;
         }
@@ -290,12 +304,12 @@ export class CustomerTrackingMap {
         }
 
         if (!this.marker) {
-            this.markerContent = vehicleMarkerContent(this.heading);
+            this.markerContent = vehicleMarkerContent(this.heading, driver);
             this.marker = new this.AdvancedMarkerElement({
                 map: this.map,
                 position: googlePosition(destination.latitude, destination.longitude),
                 content: this.markerContent,
-                title: 'Current delivery position',
+                title: driver?.name ? `${driver.name}'s live position` : 'Current rider position',
                 zIndex: 20,
             });
             this.position = destination;
@@ -309,6 +323,7 @@ export class CustomerTrackingMap {
         this.recordedAt = location.recordedAt;
         this.marker.map = this.map;
         setMarkerHeading(this.markerContent, this.heading);
+        setMarkerDriver(this.markerContent, driver);
         this.cancelAnimation();
 
         if (!shouldAnimateMarker(

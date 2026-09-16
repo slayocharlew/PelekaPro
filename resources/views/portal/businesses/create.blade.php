@@ -109,7 +109,7 @@
                 <button class="portal-button portal-button--secondary" type="button" data-use-branch-current-location>Use my current location</button>
                 <p id="branch-location-status" data-branch-location-status role="status" aria-live="polite">The map pin is optional during registration. Tap the map or use the current location to add it now.</p>
             </div>
-            <div class="portal-location-map" data-branch-location-map role="application" tabindex="0" aria-label="Select main branch location" aria-describedby="branch-location-status"></div>
+            <div class="portal-location-map" data-branch-location-map data-map-usage-url="{{ app(\App\Services\MapUsageService::class)->reportingUrl('business_onboarding') }}" role="application" tabindex="0" aria-label="Select main branch location" aria-describedby="branch-location-status"></div>
             <input name="branch[latitude]" type="hidden" value="{{ old('branch.latitude') }}" data-branch-latitude>
             <input name="branch[longitude]" type="hidden" value="{{ old('branch.longitude') }}" data-branch-longitude>
             @error('branch.latitude') <p class="portal-field__error portal-location-error">{{ $message }}</p> @enderror

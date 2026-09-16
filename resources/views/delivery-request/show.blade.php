@@ -108,7 +108,7 @@
                             <button class="portal-button portal-button--secondary" type="button" data-use-current-location>Use my current location</button>
                             <p id="delivery-request-location-status" data-location-status role="status" aria-live="polite">Choose your current location or tap the map to place the delivery pin.</p>
                         </div>
-                        <div class="delivery-request-map" data-delivery-request-map role="application" tabindex="0" aria-label="Select delivery location on map" aria-describedby="delivery-request-location-status"></div>
+                        <div class="delivery-request-map" data-delivery-request-map data-map-usage-url="{{ app(\App\Services\MapUsageService::class)->reportingUrl('customer_delivery_request') }}" role="application" tabindex="0" aria-label="Select delivery location on map" aria-describedby="delivery-request-location-status"></div>
                         <input name="dropoff_latitude" type="hidden" value="{{ old('dropoff_latitude') }}" data-request-latitude>
                         <input name="dropoff_longitude" type="hidden" value="{{ old('dropoff_longitude') }}" data-request-longitude>
                         @error('dropoff_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror

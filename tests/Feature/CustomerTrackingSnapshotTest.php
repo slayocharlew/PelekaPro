@@ -56,6 +56,11 @@ class CustomerTrackingSnapshotTest extends TestCase
                     'tracking_active' => true,
                     'live_location_available' => true,
                 ],
+                'driver' => [
+                    'name' => $driver->name,
+                    'vehicle_type' => $driver->driverProfile->vehicle_type,
+                    'vehicle_number' => $driver->driverProfile->vehicle_number,
+                ],
                 'route' => [
                     'origin' => [
                         'latitude' => (float) $delivery->pickup_latitude,
@@ -98,6 +103,10 @@ class CustomerTrackingSnapshotTest extends TestCase
             'delivery_pin',
             'customer',
             'phone',
+            'email',
+            'license_number',
+            'current_status',
+            'is_available',
             'address',
             'payment',
             'proof',
@@ -105,6 +114,43 @@ class CustomerTrackingSnapshotTest extends TestCase
         ] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $encoded);
         }
+    }
+
+    public function test_customer_snapshot_exposes_only_safe_assigned_driver_information(): void
+    {
+        $business = $this->customerTrackingBusiness();
+        $driver = $this->customerTrackingDriver($business);
+        $delivery = $this->customerTrackingDelivery($business, $driver);
+
+        $response = $this->snapshot($delivery)
+            ->assertOk()
+            ->assertExactJsonStructure([
+                'delivery',
+                'driver' => ['name', 'vehicle_type', 'vehicle_number'],
+                'route',
+                'live_location',
+                'channel',
+                'transport',
+            ])
+            ->assertJsonPath('driver.name', $driver->name)
+            ->assertJsonPath('driver.vehicle_type', 'bodaboda')
+            ->assertJsonPath('driver.vehicle_number', $driver->driverProfile->vehicle_number);
+
+        $encodedDriver = json_encode($response->json('driver'));
+
+        foreach (['driver_id', 'user_id', 'profile_id', 'phone', 'email', 'license_number', 'business_id', 'current_status', 'is_available'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $encodedDriver);
+        }
+
+        $unassigned = $this->customerTrackingDelivery($business);
+        $this->snapshot($unassigned)
+            ->assertOk()
+            ->assertJsonPath('driver', null);
+
+        $driver->driverProfile()->update(['current_status' => 'suspended']);
+        $this->snapshot($delivery)
+            ->assertOk()
+            ->assertJsonPath('driver', null);
     }
 
     public function test_route_snapshot_exposes_only_customer_safe_pickup_and_destination_coordinates(): void

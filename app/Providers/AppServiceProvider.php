@@ -6,8 +6,10 @@ use App\Contracts\FirebaseTrackingStore;
 use App\Services\CustomerDeliveryRequestSessionService;
 use App\Services\CustomerTrackingSessionService;
 use App\Services\FirebaseRealtimeTrackingStore;
+use App\Support\RequestAwareVite;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Vite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -21,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(FirebaseTrackingStore::class, FirebaseRealtimeTrackingStore::class);
+        $this->app->singleton(Vite::class, RequestAwareVite::class);
     }
 
     /**
@@ -28,6 +31,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('map-usage', fn (Request $request) => Limit::perMinute(30)
+            ->by(hash('sha256', 'map-usage|'.$request->ip())));
+
+        RateLimiter::for('driver-map-usage', fn (Request $request) => Limit::perMinute(30)
+            ->by(hash('sha256', 'driver-map-usage|'.$request->user()?->getAuthIdentifier()))
+            ->response(fn () => response()->json([
+                'success' => false,
+                'message' => 'Too many map usage reports. Please try again later.',
+            ], 429)->header('Cache-Control', 'no-store, private')));
+
         Auth::viaRequest(
             'customer-tracking-cookie',
             fn (Request $request) => app(CustomerTrackingSessionService::class)->principalFromRequest($request)

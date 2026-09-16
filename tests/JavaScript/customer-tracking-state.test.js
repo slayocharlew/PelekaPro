@@ -24,6 +24,11 @@ function snapshot(overrides = {}) {
             tracking_active: true,
             live_location_available: true,
         },
+        driver: {
+            name: 'Edwin Priscus',
+            vehicle_type: 'bodaboda',
+            vehicle_number: 'MC 123 ABC',
+        },
         route: {
             origin: {
                 latitude: -6.7755,
@@ -105,6 +110,7 @@ test('valid active snapshot exposes only normalized customer state', () => {
         'status',
         'trackingActive',
         'liveLocationAvailable',
+        'driver',
         'location',
         'routePlan',
         'channelName',
@@ -117,7 +123,31 @@ test('valid active snapshot exposes only normalized customer state', () => {
     assert.equal(result.location.latitude, -6.7924);
     assert.equal(result.routePlan.origin.latitude, -6.7755);
     assert.equal(result.routePlan.destination.longitude, 39.2083);
+    assert.deepEqual(result.driver, {
+        name: 'Edwin Priscus',
+        vehicleType: 'bodaboda',
+        vehicleNumber: 'MC 123 ABC',
+    });
     assert.equal(result.channelName, `delivery-tracking.${alias}`);
+});
+
+test('driver summary accepts only customer-safe fields and supports an unassigned delivery', () => {
+    assert.equal(validateSnapshot(snapshot({ driver: null })).driver, null);
+    assert.equal(validateSnapshot(snapshot({
+        driver: {
+            name: 'Edwin Priscus',
+            vehicle_type: 'helicopter',
+            vehicle_number: null,
+        },
+    })), null);
+    assert.equal(validateSnapshot(snapshot({
+        driver: {
+            name: 'Edwin Priscus',
+            vehicle_type: 'bodaboda',
+            vehicle_number: 'MC 123 ABC',
+            phone: '255700000000',
+        },
+    })), null);
 });
 
 test('route endpoints accept null pins but reject malformed or extra coordinate data', () => {

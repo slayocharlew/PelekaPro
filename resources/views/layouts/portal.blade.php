@@ -6,6 +6,7 @@
         request()->routeIs('portal.drivers.*') => 'drivers',
         request()->routeIs('portal.businesses.*') => 'businesses',
         request()->routeIs('portal.settings.*') => 'settings',
+        request()->routeIs('portal.map-usage.*') => 'map-usage',
         default => '',
     };
 @endphp
@@ -73,6 +74,13 @@
                                 @class(['portal-nav__link', 'is-active' => request()->routeIs('portal.businesses.*')])
                             >
                                 Businesses
+                            </a>
+                            <a
+                                href="{{ route('portal.map-usage.index') }}"
+                                data-portal-nav-section="map-usage"
+                                @class(['portal-nav__link', 'is-active' => request()->routeIs('portal.map-usage.*')])
+                            >
+                                Map usage
                             </a>
                         @endif
                         @if (auth('web')->user()->isBusinessOwner())

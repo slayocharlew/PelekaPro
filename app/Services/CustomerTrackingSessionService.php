@@ -88,7 +88,8 @@ final class CustomerTrackingSessionService
 
         $delivery = Delivery::query()
             ->with([
-                'assignedDriver',
+                'assignedDriver.role',
+                'assignedDriver.driverProfile',
                 'activeTrackingSessions.startLocation',
             ])
             ->find($claim['delivery_id']);

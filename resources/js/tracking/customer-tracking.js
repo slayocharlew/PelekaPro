@@ -70,18 +70,15 @@ class CustomerTrackingPage {
             loading: byId('tracking-loading'),
             content: byId('tracking-content'),
             alert: byId('tracking-alert'),
-            code: byId('tracking-code'),
             statusChip: byId('tracking-status-chip'),
             statusLabel: byId('tracking-status-label'),
             statusMessage: byId('tracking-status-message'),
             connection: byId('tracking-connection'),
             connectionLabel: byId('tracking-connection-label'),
             updatedTime: byId('tracking-updated-time'),
-            accuracy: byId('tracking-accuracy'),
-            speed: byId('tracking-speed'),
-            heading: byId('tracking-heading'),
-            latitude: byId('tracking-latitude'),
-            longitude: byId('tracking-longitude'),
+            driverAvatar: byId('tracking-driver-avatar'),
+            driverName: byId('tracking-driver-name'),
+            driverVehicle: byId('tracking-driver-vehicle'),
             liveBadge: byId('tracking-live-badge'),
             map: byId('tracking-map'),
             mapPlaceholder: byId('tracking-map-placeholder'),
@@ -475,10 +472,39 @@ class CustomerTrackingPage {
     render() {
         this.elements.loading.hidden = true;
         this.elements.content.hidden = false;
-        this.elements.code.textContent = this.state.trackingCode ?? '—';
+        this.renderDriver();
         this.renderStatus();
         this.renderRoute();
         this.renderLocation();
+    }
+
+    renderDriver() {
+        const driver = this.state.driver;
+
+        if (!driver) {
+            this.elements.driverAvatar.textContent = 'D';
+            this.elements.driverName.textContent = 'Waiting for assignment';
+            this.elements.driverVehicle.textContent = 'Driver details will appear here.';
+
+            return;
+        }
+
+        const vehicleLabels = {
+            bodaboda: 'Bodaboda',
+            bajaji: 'Bajaji',
+            bicycle: 'Bicycle',
+            car: 'Car',
+            van: 'Van',
+            truck: 'Truck',
+            other: 'Delivery vehicle',
+        };
+        const vehicle = vehicleLabels[driver.vehicleType] ?? 'Delivery rider';
+
+        this.elements.driverAvatar.textContent = driver.name.charAt(0).toLocaleUpperCase();
+        this.elements.driverName.textContent = driver.name;
+        this.elements.driverVehicle.textContent = driver.vehicleNumber
+            ? `${vehicle} · ${driver.vehicleNumber}`
+            : vehicle;
     }
 
     async renderRoute() {
@@ -586,7 +612,7 @@ class CustomerTrackingPage {
         }
 
         if (mapAvailable) {
-            this.map.showLocation(location, this.state.routePlan.destination);
+            this.map.showLocation(location, this.state.routePlan.destination, this.state.driver);
             this.elements.mapPlaceholder.hidden = true;
 
             this.map.refreshRemainingRoute(this.state.routePlan, location).then((refreshed) => {
@@ -602,22 +628,11 @@ class CustomerTrackingPage {
         } else {
             this.showMapMessage(
                 'Live position received',
-                'The map view is temporarily unavailable. The latest GPS details are shown below.'
+                'The map view is temporarily unavailable. We will reconnect automatically.'
             );
         }
 
         this.elements.liveBadge.hidden = false;
-        this.elements.latitude.textContent = location.latitude.toFixed(6);
-        this.elements.longitude.textContent = location.longitude.toFixed(6);
-        this.elements.accuracy.textContent = location.accuracy === null
-            ? 'Not reported'
-            : `Within ${Math.round(location.accuracy)} m`;
-        this.elements.speed.textContent = location.speed === null
-            ? 'Not reported'
-            : `${Math.round(location.speed * 3.6)} km/h`;
-        this.elements.heading.textContent = location.heading === null
-            ? 'Not reported'
-            : `${Math.round(location.heading)}°`;
         this.renderTime();
 
         const staleIn = Math.max(0, Date.parse(location.recordedAt) + 90_000 - Date.now());
@@ -638,7 +653,7 @@ class CustomerTrackingPage {
         const location = this.state.location;
 
         if (!location) {
-            this.elements.updatedTime.textContent = 'Not available';
+            this.elements.updatedTime.textContent = 'Location not available';
             this.elements.updatedTime.removeAttribute('datetime');
 
             return;
@@ -664,11 +679,6 @@ class CustomerTrackingPage {
     }
 
     clearLocationDetails() {
-        this.elements.latitude.textContent = '—';
-        this.elements.longitude.textContent = '—';
-        this.elements.accuracy.textContent = '—';
-        this.elements.speed.textContent = '—';
-        this.elements.heading.textContent = '—';
         this.renderTime();
     }
 

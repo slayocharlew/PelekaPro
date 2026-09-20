@@ -98,19 +98,6 @@ trait CreatesCustomerDeliveryRequestFixtures
             'dropoff_address' => 'Mikocheni, Dar es Salaam',
             'dropoff_latitude' => -6.7750000,
             'dropoff_longitude' => 39.2500000,
-            'special_instruction' => 'Call at the gate',
-            'items' => [
-                [
-                    'item_name' => 'Parcel',
-                    'quantity' => 2,
-                    'description' => 'Two sealed packages',
-                ],
-                [
-                    'item_name' => 'Documents',
-                    'quantity' => 1,
-                    'description' => null,
-                ],
-            ],
         ], $overrides);
     }
 
@@ -123,27 +110,30 @@ trait CreatesCustomerDeliveryRequestFixtures
     ): array {
         return array_replace_recursive([
             'customer_resolution' => 'new',
-            'customer_name' => $deliveryRequest->customer_name,
-            'customer_phone' => $deliveryRequest->customer_phone,
             'branch_id' => null,
             'pickup_name' => 'Shop dispatch',
             'pickup_phone' => '255700000001',
             'pickup_address' => 'Sinza, Dar es Salaam',
             'pickup_latitude' => -6.7800000,
             'pickup_longitude' => 39.2200000,
-            'dropoff_address' => $deliveryRequest->dropoff_address,
-            'dropoff_latitude' => $deliveryRequest->dropoff_latitude,
-            'dropoff_longitude' => $deliveryRequest->dropoff_longitude,
             'payment_method' => 'cash_on_delivery',
             'amount_to_collect' => 18000,
             'delivery_fee' => 2000,
-            'special_instruction' => $deliveryRequest->special_instruction,
-            'items' => $deliveryRequest->items->map(fn ($item): array => [
-                'item_name' => $item->item_name,
-                'quantity' => $item->quantity,
-                'amount' => 9000,
-                'description' => $item->description,
-            ])->all(),
+            'special_instruction' => 'Handle with care',
+            'items' => [
+                [
+                    'item_name' => 'Parcel',
+                    'quantity' => 2,
+                    'amount' => 9000,
+                    'description' => 'Two sealed packages',
+                ],
+                [
+                    'item_name' => 'Documents',
+                    'quantity' => 1,
+                    'amount' => 0,
+                    'description' => null,
+                ],
+            ],
         ], $overrides);
     }
 }

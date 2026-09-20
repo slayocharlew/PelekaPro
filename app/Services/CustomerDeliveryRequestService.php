@@ -140,21 +140,12 @@ final class CustomerDeliveryRequestService
                 'dropoff_address',
                 'dropoff_latitude',
                 'dropoff_longitude',
-                'special_instruction',
             ]) + [
                 'status' => 'submitted',
                 'submitted_at' => now(),
             ])->save();
 
-            foreach ($payload['items'] as $item) {
-                $locked->items()->create([
-                    'item_name' => $item['item_name'],
-                    'quantity' => $item['quantity'] ?? 1,
-                    'description' => $item['description'] ?? null,
-                ]);
-            }
-
-            return $locked->load('items');
+            return $locked;
         });
     }
 
@@ -184,11 +175,12 @@ final class CustomerDeliveryRequestService
                     ->whereKey($payload['customer_id'])
                     ->where('business_id', $locked->business_id)
                     ->where('status', 'active')
+                    ->where('phone', $locked->customer_phone)
                     ->firstOrFail()
                 : Customer::query()->create([
                     'business_id' => $locked->business_id,
-                    'name' => $payload['customer_name'],
-                    'phone' => $payload['customer_phone'],
+                    'name' => $locked->customer_name,
+                    'phone' => $locked->customer_phone,
                     'status' => 'active',
                 ]);
 
@@ -199,17 +191,18 @@ final class CustomerDeliveryRequestService
                 'pickup_address',
                 'pickup_latitude',
                 'pickup_longitude',
-                'dropoff_address',
-                'dropoff_latitude',
-                'dropoff_longitude',
                 'payment_method',
                 'amount_to_collect',
                 'delivery_fee',
                 'special_instruction',
                 'items',
             ]);
-            $deliveryPayload['dropoff_name'] = $payload['customer_name'];
-            $deliveryPayload['dropoff_phone'] = $payload['customer_phone'];
+            // Contact and destination always come from the locked customer submission.
+            $deliveryPayload['dropoff_name'] = $locked->customer_name;
+            $deliveryPayload['dropoff_phone'] = $locked->customer_phone;
+            $deliveryPayload['dropoff_address'] = $locked->dropoff_address;
+            $deliveryPayload['dropoff_latitude'] = $locked->dropoff_latitude;
+            $deliveryPayload['dropoff_longitude'] = $locked->dropoff_longitude;
 
             $delivery = $this->deliveries->createForCustomer(
                 $deliveryPayload,

@@ -1,6 +1,6 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
-import { authorizePrivateChannel } from './tracking/broadcast-auth';
+import { authorizePrivateChannel } from './tracking/broadcast-auth.js';
 
 let echoInstance;
 

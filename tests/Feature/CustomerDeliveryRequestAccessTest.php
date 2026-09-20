@@ -131,7 +131,10 @@ class CustomerDeliveryRequestAccessTest extends TestCase
             ->assertSee('name="customer_name"', false)
             ->assertSee('name="customer_phone"', false)
             ->assertDontSee('name="customer_email"', false)
-            ->assertSee('name="items[0][item_name]"', false)
+            ->assertDontSee('name="items[', false)
+            ->assertDontSee('data-add-request-item', false)
+            ->assertDontSee('name="special_instruction"', false)
+            ->assertSee('name="dropoff_address"', false)
             ->assertSee('data-delivery-request-map', false)
             ->assertSee('name="dropoff_latitude"', false)
             ->assertSee('name="dropoff_longitude"', false)
@@ -141,6 +144,19 @@ class CustomerDeliveryRequestAccessTest extends TestCase
             ->assertDontSee('name="payment_method"', false)
             ->assertDontSee('name="delivery_pin"', false);
         $this->assertSecurityHeaders($response);
+
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $fields = [];
+
+        foreach ((new \DOMXPath($document))->query('//form//input[@name] | //form//textarea[@name] | //form//select[@name]') as $input) {
+            $fields[] = $input->getAttribute('name');
+        }
+
+        $this->assertSame([
+            '_token', 'customer_name', 'customer_phone', 'dropoff_address',
+            'dropoff_latitude', 'dropoff_longitude',
+        ], $fields);
 
         $this->defaultCookies = [];
         Auth::forgetGuards();
@@ -170,8 +186,12 @@ class CustomerDeliveryRequestAccessTest extends TestCase
         $this->assertNotNull($deliveryRequest->submitted_at);
         $this->assertSame('Asha Mteja', $deliveryRequest->customer_name);
         $this->assertNull($deliveryRequest->customer_email);
+        $this->assertNull($deliveryRequest->special_instruction);
+        $this->assertSame('255712345678', $deliveryRequest->customer_phone);
+        $this->assertSame('Mikocheni, Dar es Salaam', $deliveryRequest->dropoff_address);
         $this->assertSame('-6.7750000', $deliveryRequest->dropoff_latitude);
-        $this->assertDatabaseCount('customer_delivery_request_items', 2);
+        $this->assertSame('39.2500000', $deliveryRequest->dropoff_longitude);
+        $this->assertDatabaseCount('customer_delivery_request_items', 0);
         $this->assertDatabaseCount('customers', 0);
         $this->assertDatabaseCount('customer_addresses', 0);
         $this->assertDatabaseCount('deliveries', 0);
@@ -182,7 +202,37 @@ class CustomerDeliveryRequestAccessTest extends TestCase
         $this->withCredentials()->withCookie($cookieName, $cookieValue)
             ->postJson('/delivery-request/session', $this->customerDeliveryRequestSubmission())
             ->assertUnauthorized();
-        $this->assertDatabaseCount('customer_delivery_request_items', 2);
+        $this->assertDatabaseCount('customer_delivery_request_items', 0);
+    }
+
+    public function test_customer_cannot_supply_items_instructions_or_prices_even_with_a_forged_submission(): void
+    {
+        $business = $this->deliveryRequestBusiness();
+        $owner = $this->deliveryRequestUser('business_owner', $business);
+        $issued = $this->issueCustomerDeliveryRequest($owner, $business);
+        $cookieName = app(CustomerDeliveryRequestSessionService::class)->cookieName();
+        $cookieValue = $this->customerDeliveryRequestCookie($issued['token']);
+
+        $this->withCredentials()->withCookie($cookieName, $cookieValue)
+            ->post('/delivery-request/session', $this->customerDeliveryRequestSubmission([
+                'items' => [['item_name' => 'Unapproved item', 'quantity' => 99, 'amount' => 1]],
+                'special_instruction' => 'Unapproved instructions',
+                'amount_to_collect' => 1,
+                'delivery_fee' => 1,
+                'payment_method' => 'prepaid',
+                'customer_email' => 'unapproved@example.test',
+            ]))
+            ->assertRedirect(route('customer.delivery-request.submitted'));
+
+        $deliveryRequest = $issued['delivery_request']->refresh();
+        $this->assertSame('submitted', $deliveryRequest->status);
+        $this->assertSame('Asha Mteja', $deliveryRequest->customer_name);
+        $this->assertNull($deliveryRequest->special_instruction);
+        $this->assertNull($deliveryRequest->customer_email);
+        $this->assertDatabaseCount('customer_delivery_request_items', 0);
+        $this->assertDatabaseCount('customers', 0);
+        $this->assertDatabaseCount('deliveries', 0);
+        $this->assertDatabaseCount('delivery_payments', 0);
     }
 
     public function test_validation_and_forbidden_ownership_inputs_cannot_mutate_request(): void
@@ -200,7 +250,6 @@ class CustomerDeliveryRequestAccessTest extends TestCase
                 'customer_phone' => '',
                 'dropoff_latitude' => 91,
                 'dropoff_longitude' => 181,
-                'items' => [],
             ])
             ->assertRedirect('/delivery-request')
             ->assertSessionHasErrors([
@@ -209,7 +258,6 @@ class CustomerDeliveryRequestAccessTest extends TestCase
                 'dropoff_address',
                 'dropoff_latitude',
                 'dropoff_longitude',
-                'items',
             ]);
 
         $this->assertSame('pending', $issued['delivery_request']->refresh()->status);

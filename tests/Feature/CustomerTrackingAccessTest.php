@@ -87,14 +87,17 @@ class CustomerTrackingAccessTest extends TestCase
         $deleted = $this->get("/track/{$delivery->public_tracking_token}");
 
         foreach ([$malformed, $unknown, $deleted] as $response) {
-            $response->assertNotFound();
-            $this->assertSame('Tracking access is invalid or expired.', $response->getContent());
+            $response->assertNotFound()
+                ->assertViewIs('tracking.invalid')
+                ->assertSee('This tracking link is invalid or has expired.')
+                ->assertDontSee((string) $delivery->public_tracking_token);
             $this->assertSecurityHeaders($response);
         }
 
         $this->assertSame($malformed->getStatusCode(), $unknown->getStatusCode());
-        $this->assertSame($malformed->getContent(), $unknown->getContent());
-        $this->assertSame($unknown->getContent(), $deleted->getContent());
+        // Font preloads are deduplicated across requests in the test process.
+        $this->assertSame(strstr($malformed->getContent(), '<body'), strstr($unknown->getContent(), '<body'));
+        $this->assertSame(strstr($unknown->getContent(), '<body'), strstr($deleted->getContent(), '<body'));
     }
 
     public function test_entry_rate_limiter_does_not_reveal_delivery_existence(): void

@@ -324,15 +324,27 @@ export function createInitialState() {
 }
 
 export function applySnapshot(state, snapshot) {
-    return {
+    if (state.ended) {
+        return state;
+    }
+
+    const nextState = {
         ...state,
         ...snapshot,
-        ended: TERMINAL_STATUSES.includes(snapshot.status),
+        ended: false,
     };
+
+    return TERMINAL_STATUSES.includes(snapshot.status)
+        ? terminalState(nextState)
+        : nextState;
 }
 
 export function applyLocationEvent(state, location) {
-    if (state.ended || !state.trackingActive || !ACTIVE_STATUSES.includes(state.status)) {
+    if (state.ended) {
+        return { state, changed: false, requiresSnapshot: false };
+    }
+
+    if (!state.trackingActive || !ACTIVE_STATUSES.includes(state.status)) {
         return { state, changed: false, requiresSnapshot: true };
     }
 
@@ -359,30 +371,22 @@ export function applyLocationEvent(state, location) {
 }
 
 export function applyTerminalEvent(state, terminal) {
-    if (state.trackingCode && terminal.trackingCode !== state.trackingCode) {
-        return { state, changed: false };
-    }
-
-    if (state.ended && state.status === terminal.status) {
+    if (state.ended || (state.trackingCode && terminal.trackingCode !== state.trackingCode)) {
         return { state, changed: false };
     }
 
     return {
-        state: {
+        state: terminalState({
             ...state,
             trackingCode: terminal.trackingCode,
             status: terminal.status,
-            trackingActive: false,
-            liveLocationAvailable: false,
-            location: null,
-            ended: true,
-        },
+        }),
         changed: true,
     };
 }
 
 export function applyTrackingStatusEvent(state, status) {
-    if (state.trackingCode && status.trackingCode !== state.trackingCode) {
+    if (state.ended || (state.trackingCode && status.trackingCode !== state.trackingCode)) {
         return { state, changed: false };
     }
 
@@ -413,6 +417,23 @@ export function applyTrackingStatusEvent(state, status) {
             || nextState.trackingActive !== state.trackingActive
             || nextState.liveLocationAvailable !== state.liveLocationAvailable
             || nextState.location !== state.location,
+    };
+}
+
+function terminalState(state) {
+    return {
+        ...state,
+        trackingActive: false,
+        liveLocationAvailable: false,
+        driver: null,
+        location: null,
+        routePlan: { origin: null, destination: null },
+        channelName: null,
+        locationEvent: null,
+        statusEvent: null,
+        transportName: null,
+        firebaseCredentialsUrl: null,
+        ended: true,
     };
 }
 

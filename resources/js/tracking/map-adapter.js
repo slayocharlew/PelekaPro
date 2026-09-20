@@ -144,7 +144,7 @@ export class CustomerTrackingMap {
     }
 
     async showRoute(routePlan, liveOrigin = null) {
-        if (!this.map || !this.AdvancedMarkerElement || !this.Route || !this.LatLngBounds) {
+        if (this.destroyed || !this.map || !this.AdvancedMarkerElement || !this.Route || !this.LatLngBounds) {
             return { visible: false, roadRoute: false, liveRoute: false };
         }
 
@@ -249,6 +249,10 @@ export class CustomerTrackingMap {
             }
         }
 
+        if (this.destroyed || !this.map) {
+            return { visible: false, roadRoute: false, liveRoute: false };
+        }
+
         this.fitRouteContext(path);
 
         return {
@@ -259,7 +263,8 @@ export class CustomerTrackingMap {
     }
 
     async refreshRemainingRoute(routePlan, location) {
-        if (this.routeRefreshPromise
+        if (this.destroyed
+            || this.routeRefreshPromise
             || !routePlan.destination
             || !shouldRefreshRemainingRoute({
                 location,

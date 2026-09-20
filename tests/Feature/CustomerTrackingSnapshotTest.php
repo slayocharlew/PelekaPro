@@ -407,16 +407,18 @@ class CustomerTrackingSnapshotTest extends TestCase
         foreach (['delivered', 'failed', 'cancelled'] as $status) {
             $delivery = $this->activeCustomerTrackingDelivery($business, $driver);
             $this->putCustomerTrackingLiveLocation($delivery, $driver);
+            $cookieName = app(CustomerTrackingSessionService::class)->cookieName();
+            $cookieValue = $this->customerTrackingCookieValue($delivery);
             $delivery->forceFill([
                 'status' => $status,
                 "{$status}_at" => now(),
             ])->save();
 
-            $this->snapshot($delivery)
-                ->assertJsonPath('delivery.status', $status)
-                ->assertJsonPath('delivery.tracking_active', false)
-                ->assertJsonPath('delivery.live_location_available', false)
-                ->assertJsonPath('live_location', null);
+            Auth::forgetGuards();
+            $this->withCredentials()->withCookie($cookieName, $cookieValue)
+                ->getJson('/tracking/session')
+                ->assertUnauthorized()
+                ->assertExactJson(['message' => 'Tracking access is invalid or expired.']);
         }
     }
 

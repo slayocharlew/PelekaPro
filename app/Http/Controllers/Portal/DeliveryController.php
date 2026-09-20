@@ -126,7 +126,10 @@ class DeliveryController extends Controller
 
         return view('portal.deliveries.edit', array_merge(
             $this->formOptions($request->user('web'), $delivery->business_id),
-            ['delivery' => $delivery]
+            [
+                'delivery' => $delivery,
+                'customerDetailsLocked' => $this->deliveries->hasCustomerProvidedDetails($delivery),
+            ]
         ));
     }
 

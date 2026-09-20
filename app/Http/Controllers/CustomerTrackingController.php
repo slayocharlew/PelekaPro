@@ -28,7 +28,10 @@ class CustomerTrackingController extends Controller
             ->where('public_tracking_token', $publicTrackingToken)
             ->first();
 
-        if (! $delivery || ! hash_equals((string) $delivery->public_tracking_token, $publicTrackingToken)) {
+        if (! $delivery
+            || ! $sessions->allowsTracking($delivery)
+            || ! hash_equals((string) $delivery->public_tracking_token, $publicTrackingToken)
+        ) {
             return $this->invalid();
         }
 
@@ -81,6 +84,6 @@ class CustomerTrackingController extends Controller
 
     private function invalid(): Response
     {
-        return response('Tracking access is invalid or expired.', 404);
+        return response()->view('tracking.invalid', status: 404);
     }
 }

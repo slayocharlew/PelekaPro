@@ -7,7 +7,7 @@
         <meta name="robots" content="noindex, nofollow, noarchive">
         <meta name="referrer" content="no-referrer">
 
-        <title>Tracking session unavailable · PelekaPro</title>
+        <title>Tracking link unavailable · PelekaPro</title>
 
         @include('partials.pelekapro-icons')
 
@@ -26,10 +26,9 @@
                     </svg>
                 </div>
 
-                <h1>Tracking session unavailable</h1>
+                <h1>This tracking link is invalid or has expired.</h1>
                 <p>
-                    This tracking link is invalid or the secure session has expired.
-                    Please use the original tracking link again.
+                    Tracking is no longer available through this link or session.
                 </p>
             </div>
         </main>

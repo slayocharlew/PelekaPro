@@ -12,6 +12,8 @@ use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 final class CustomerTrackingSessionService
 {
+    private const TERMINAL_STATUSES = ['delivered', 'failed', 'cancelled'];
+
     private const CLAIM_KEYS = [
         'delivery_id',
         'channel_alias',
@@ -94,7 +96,7 @@ final class CustomerTrackingSessionService
             ])
             ->find($claim['delivery_id']);
 
-        if (! $delivery || ! $this->claimMatchesDelivery($claim, $delivery)) {
+        if (! $delivery || ! $this->allowsTracking($delivery) || ! $this->claimMatchesDelivery($claim, $delivery)) {
             return null;
         }
 
@@ -111,7 +113,7 @@ final class CustomerTrackingSessionService
     {
         $delivery = $principal->authoritativeDelivery();
 
-        if ((int) $delivery->getKey() !== $principal->deliveryId || $delivery->trashed()) {
+        if ((int) $delivery->getKey() !== $principal->deliveryId || ! $this->allowsTracking($delivery)) {
             return null;
         }
 
@@ -120,6 +122,12 @@ final class CustomerTrackingSessionService
         return hash_equals($expectedAlias, $principal->channelAlias)
             ? $delivery
             : null;
+    }
+
+    public function allowsTracking(Delivery $delivery): bool
+    {
+        return ! $delivery->trashed()
+            && ! in_array($delivery->status, self::TERMINAL_STATUSES, true);
     }
 
     public function requestContainsForbiddenCredentials(Request $request): bool

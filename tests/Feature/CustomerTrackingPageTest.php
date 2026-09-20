@@ -80,16 +80,16 @@ class CustomerTrackingPageTest extends TestCase
         foreach ([$missing, $expired] as $response) {
             $response->assertUnauthorized()
                 ->assertViewIs('tracking.invalid')
-                ->assertSee('Tracking session unavailable')
-                ->assertSee('invalid or the secure session has expired')
+                ->assertSee('This tracking link is invalid or has expired.')
+                ->assertSee('Tracking is no longer available through this link or session.')
                 ->assertHeader('Cache-Control', 'no-store, private')
                 ->assertHeader('Referrer-Policy', 'no-referrer');
         }
 
         $this->assertSame($missing->getStatusCode(), $expired->getStatusCode());
-        $missing->assertSee('Tracking session unavailable')
+        $missing->assertSee('This tracking link is invalid or has expired.')
             ->assertDontSee('delivery_id');
-        $expired->assertSee('Tracking session unavailable')
+        $expired->assertSee('This tracking link is invalid or has expired.')
             ->assertDontSee('delivery_id');
         $this->assertStringNotContainsString((string) $delivery->public_tracking_token, $expired->getContent());
     }

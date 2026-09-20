@@ -2,16 +2,19 @@ import {
     coordinateFromGoogle,
     googlePosition,
     loadGoogleMaps,
-} from './maps/google-maps-loader';
+} from './maps/google-maps-loader.js';
 
 const DEFAULT_CENTER = { lat: -6.7924, lng: 39.2083 };
-const MAX_ITEMS = 20;
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content || '';
 }
 
-function validCoordinate(value, minimum, maximum) {
+export function validCoordinate(value, minimum, maximum) {
+    if (!['string', 'number'].includes(typeof value) || String(value).trim() === '') {
+        return false;
+    }
+
     const numeric = Number(value);
 
     return Number.isFinite(numeric) && numeric >= minimum && numeric <= maximum;
@@ -24,66 +27,6 @@ function locationMarker() {
     container.innerHTML = '<span class="map-location-marker" aria-hidden="true"></span>';
 
     return container;
-}
-
-function initializeRequestItems(root) {
-    const container = root.querySelector('[data-request-items]');
-    const template = root.querySelector('[data-request-item-template]');
-    const addButton = root.querySelector('[data-add-request-item]');
-
-    if (!container || !template || !addButton) {
-        return;
-    }
-
-    const refresh = () => {
-        const items = [...container.querySelectorAll('[data-request-item]')];
-
-        items.forEach((item, index) => {
-            const number = item.querySelector('[data-request-item-number]');
-            const remove = item.querySelector('[data-remove-request-item]');
-
-            if (number) {
-                number.textContent = String(index + 1);
-            }
-
-            if (remove) {
-                remove.disabled = items.length === 1;
-                remove.setAttribute('aria-label', `Remove item ${index + 1}`);
-            }
-        });
-
-        addButton.disabled = items.length >= MAX_ITEMS;
-    };
-
-    container.addEventListener('click', (event) => {
-        const remove = event.target.closest('[data-remove-request-item]');
-
-        if (!remove || container.querySelectorAll('[data-request-item]').length <= 1) {
-            return;
-        }
-
-        remove.closest('[data-request-item]')?.remove();
-        refresh();
-    });
-
-    addButton.addEventListener('click', () => {
-        if (container.querySelectorAll('[data-request-item]').length >= MAX_ITEMS) {
-            return;
-        }
-
-        const index = `${Date.now()}${container.children.length}`;
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = template.innerHTML.replaceAll('__INDEX__', index).trim();
-        const item = wrapper.firstElementChild;
-
-        if (item) {
-            container.append(item);
-            refresh();
-            item.querySelector('input')?.focus();
-        }
-    });
-
-    refresh();
 }
 
 async function initializeRequestMap(root) {
@@ -317,7 +260,6 @@ export function initializeCustomerDeliveryRequest() {
         return;
     }
 
-    initializeRequestItems(root);
     initializeRequestMap(root);
     initializeRequestSubmission(root);
     initializeSessionClose(root);

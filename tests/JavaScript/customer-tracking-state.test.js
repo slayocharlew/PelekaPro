@@ -344,7 +344,7 @@ test('Firebase public status rejects contradictory or unsafe authority', () => {
     })), null);
 });
 
-test('terminal event immediately ends tracking and clears marker state', () => {
+test('terminal event immediately ends tracking and clears marker, route, driver and subscription state', () => {
     const active = applySnapshot(createInitialState(), validateSnapshot(snapshot()));
     const terminal = validateTerminalEvent({
         tracking_code: 'TRK-TEST-001',
@@ -360,7 +360,44 @@ test('terminal event immediately ends tracking and clears marker state', () => {
     assert.equal(result.state.trackingActive, false);
     assert.equal(result.state.liveLocationAvailable, false);
     assert.equal(result.state.location, null);
-    assert.deepEqual(result.state.routePlan, active.routePlan);
+    assert.deepEqual(result.state.routePlan, { origin: null, destination: null });
+    assert.equal(result.state.driver, null);
+    assert.equal(result.state.channelName, null);
+    assert.equal(result.state.firebaseCredentialsUrl, null);
+});
+
+test('late snapshots and Firebase events cannot reactivate a terminal tracking state', () => {
+    for (const status of ['delivered', 'failed', 'cancelled']) {
+        const active = applySnapshot(createInitialState(), validateSnapshot(snapshot()));
+        const ended = applyTerminalEvent(active, { trackingCode: active.trackingCode, status }).state;
+        const restored = applySnapshot(ended, validateSnapshot(snapshot()));
+        const lateStatus = applyTrackingStatusEvent(ended, validateTrackingStatusEvent(statusEvent({
+            status: 'on_the_way', tracking_active: true, live_location_available: true,
+        })));
+        const lateLocation = applyLocationEvent(ended, validateLocationEvent(locationEvent()));
+
+        assert.equal(restored, ended);
+        assert.equal(lateStatus.state, ended);
+        assert.equal(lateStatus.changed, false);
+        assert.equal(lateLocation.state, ended);
+        assert.equal(lateLocation.changed, false);
+        assert.equal(lateLocation.requiresSnapshot, false);
+    }
+});
+
+test('terminal snapshots in flight at completion clear route and driver state too', () => {
+    for (const status of ['delivered', 'failed', 'cancelled']) {
+        const result = applySnapshot(createInitialState(), validateSnapshot(snapshot({
+            delivery: { status, tracking_active: false, live_location_available: false },
+            live_location: null,
+        })));
+
+        assert.equal(result.status, status);
+        assert.equal(result.ended, true);
+        assert.equal(result.location, null);
+        assert.equal(result.driver, null);
+        assert.deepEqual(result.routePlan, { origin: null, destination: null });
+    }
 });
 
 test('terminal event rejects invalid status and another tracking code', () => {

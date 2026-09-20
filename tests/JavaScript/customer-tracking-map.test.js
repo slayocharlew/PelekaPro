@@ -141,7 +141,7 @@ test('live marker is a rider motorcycle and labels the assigned driver safely', 
     assert.doesNotMatch(source, /label\.innerHTML/);
 });
 
-test('terminal delivery state still allows the static pickup-to-destination route to finish rendering', async () => {
+test('terminal delivery state blocks rendering the static pickup-to-destination route', async () => {
     const source = await import('node:fs/promises').then(({ readFile }) => readFile(
         new URL('../../resources/js/tracking/customer-tracking.js', import.meta.url),
         'utf8'
@@ -151,6 +151,8 @@ test('terminal delivery state still allows the static pickup-to-destination rout
         source.indexOf('renderStatus()', source.indexOf('async renderRoute()'))
     );
 
-    assert.equal(renderRoute.includes('this.ended'), false);
+    assert.match(renderRoute, /if \(this\.ended \|\| this\.state\.ended\)/);
+    assert.match(renderRoute, /if \(this\.ended \|\| !mapAvailable/);
+    assert.match(renderRoute, /if \(this\.ended \|\| this\.state\.routePlan !== routePlan/);
     assert.match(renderRoute, /this\.state\.routePlan !== routePlan/);
 });

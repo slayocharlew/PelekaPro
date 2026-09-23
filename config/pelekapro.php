@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'map_usage' => [
+        // Planning target only; Google Cloud remains authoritative for quotas and billing.
+        'monthly_web_load_target' => (int) env('PELEKAPRO_WEB_MAP_LOAD_TARGET', 10000),
+    ],
     'live_tracking' => [
         'enabled' => env('PELEKAPRO_LIVE_TRACKING_ENABLED', true),
         'driver' => env('PELEKAPRO_LIVE_TRACKING_DRIVER', 'redis'),

@@ -152,6 +152,7 @@ All routes except login use both `auth:sanctum` and `active.api.user`.
 | `POST` | `/api/auth/logout` | End this device session | Revoke only the current token |
 | `POST` | `/api/auth/logout-all` | End every device session | Revoke all tokens for the user |
 | `GET` | `/api/driver/deliveries` | Render assigned-delivery list | Return only deliveries assigned to `users.id` |
+| `POST` | `/api/driver/map-usage` | Report once per actual Android Google map creation | Record deduplicated, same-business map-opening telemetry |
 | `GET` | `/api/driver/deliveries/{delivery}` | Render detail and available failure reasons | Enforce assignment/business ownership |
 | `POST` | `/api/driver/deliveries/{delivery}/start` | Start workflow, then GPS after success | Atomically start delivery and tracking session |
 | `POST` | `/api/driver/deliveries/{delivery}/tracking-credentials` | Refresh a short-lived Firebase lease | Revalidate MySQL authority and issue one scoped custom token |
@@ -813,3 +814,23 @@ When mobile development proves that an API is missing:
 Authentication does not replace authorization. Every future endpoint must
 continue enforcing role, business isolation, assigned-driver ownership, active
 user/profile state, and valid delivery transitions.
+
+## 17. Android map-opening measurement
+
+Use `POST /api/driver/map-usage` only when an actual Google map instance is
+created. Send the existing header-only Sanctum bearer token and a JSON object
+containing only `event_id`, a fresh UUID. The server resolves the driver's
+business and records the opening as `driver_android` in the Map usage dashboard.
+
+Success is **204 No Content**, including duplicate UUID reports; do not expect
+the usual response envelope. A retry for the same opening must reuse the UUID.
+The limit is 30 reports per minute per user. Errors are 401 (authentication),
+403 (role/account/profile/business), 422 (UUID), 429 (rate limit) or 503 (recording
+unavailable). A measurement failure must never block the map or GPS workflow.
+
+Do not report map openings from GPS timers, Firebase listeners, marker movement,
+camera animation, panning, zooming or widget rebuilds. No locations or tracking
+credentials belong in this report. Android reporting requires a Flutter change;
+the Laravel endpoint alone cannot observe maps opened on a phone.
+
+See [the complete API contract and Android Studio handoff](mobile-map-usage.md).

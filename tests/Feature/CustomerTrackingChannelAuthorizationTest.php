@@ -7,6 +7,7 @@ use App\Broadcasting\CustomerDeliveryTrackingChannel;
 use App\Services\CustomerTrackingChannelAlias;
 use App\Services\CustomerTrackingSessionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Broadcast;
 use Tests\Support\CreatesCustomerTrackingFixtures;
 use Tests\TestCase;
@@ -115,6 +116,29 @@ class CustomerTrackingChannelAuthorizationTest extends TestCase
                 $this->authorizationPayload("private-delivery-tracking.{$claim['channel_alias']}")
             )
             ->assertForbidden();
+    }
+
+    public function test_terminal_delivery_revokes_existing_cookie_channel_authorization(): void
+    {
+        foreach (['delivered', 'failed', 'cancelled'] as $status) {
+            $delivery = $this->customerTrackingDelivery($this->customerTrackingBusiness());
+            $cookieName = app(CustomerTrackingSessionService::class)->cookieName();
+            $cookieValue = $this->customerTrackingCookieValue($delivery);
+            $alias = app(CustomerTrackingChannelAlias::class)->forToken((string) $delivery->public_tracking_token);
+            $payload = $this->authorizationPayload("private-delivery-tracking.{$alias}");
+
+            Auth::forgetGuards();
+            $this->withCredentials()->withCookie($cookieName, $cookieValue)
+                ->postJson('/broadcasting/auth', $payload)
+                ->assertOk();
+
+            $delivery->forceFill(['status' => $status, "{$status}_at" => now()])->save();
+
+            Auth::forgetGuards();
+            $this->withCredentials()->withCookie($cookieName, $cookieValue)
+                ->postJson('/broadcasting/auth', $payload)
+                ->assertForbidden();
+        }
     }
 
     public function test_normal_web_users_and_driver_bearer_auth_do_not_authorize_customer_channels(): void

@@ -427,10 +427,8 @@ function initializeDeliveryFilters(root) {
     }
 
     browser.dataset.deliveryFiltersReady = 'true';
-    let searchTimer;
 
     const applyForm = () => {
-        window.clearTimeout(searchTimer);
         loadDeliveryBrowser(root, deliveryFilterUrl(form));
     };
 
@@ -441,11 +439,6 @@ function initializeDeliveryFilters(root) {
 
     form.querySelectorAll('select').forEach((select) => {
         select.addEventListener('change', applyForm);
-    });
-
-    form.querySelector('input[type="search"]')?.addEventListener('input', () => {
-        window.clearTimeout(searchTimer);
-        searchTimer = window.setTimeout(applyForm, 350);
     });
 
     browser.addEventListener('click', (event) => {

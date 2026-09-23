@@ -31,6 +31,7 @@ class CustomerTrackingPageTest extends TestCase
             ->assertSee('data-customer-tracking', false)
             ->assertSee('PelekaPro')
             ->assertSee('tracking-route-notice')
+            ->assertSee('tracking-driver-sheet')
             ->assertSee('<meta name="theme-color" content="#ff6c37">', false)
             ->assertSee('/tracking/session', false)
             ->assertHeader('Cache-Control', 'no-store, private')
@@ -47,6 +48,13 @@ class CustomerTrackingPageTest extends TestCase
         $this->assertStringNotContainsString('tracking_session_id', $html);
         $this->assertStringNotContainsString('business.', $html);
         $this->assertStringNotContainsString('REVERB_APP_SECRET', $html);
+        $this->assertStringNotContainsString('tracking-summary', $html);
+        $this->assertStringNotContainsString('tracking-map-footer', $html);
+        $this->assertStringNotContainsString('tracking-accuracy', $html);
+        $this->assertStringNotContainsString('tracking-speed', $html);
+        $this->assertStringNotContainsString('tracking-heading', $html);
+        $this->assertStringNotContainsString('tracking-latitude', $html);
+        $this->assertStringNotContainsString('tracking-longitude', $html);
     }
 
     public function test_missing_and_expired_cookies_receive_the_same_generic_invalid_session_page(): void
@@ -72,16 +80,16 @@ class CustomerTrackingPageTest extends TestCase
         foreach ([$missing, $expired] as $response) {
             $response->assertUnauthorized()
                 ->assertViewIs('tracking.invalid')
-                ->assertSee('Tracking session unavailable')
-                ->assertSee('invalid or the secure session has expired')
+                ->assertSee('This tracking link is invalid or has expired.')
+                ->assertSee('Tracking is no longer available through this link or session.')
                 ->assertHeader('Cache-Control', 'no-store, private')
                 ->assertHeader('Referrer-Policy', 'no-referrer');
         }
 
         $this->assertSame($missing->getStatusCode(), $expired->getStatusCode());
-        $missing->assertSee('Tracking session unavailable')
+        $missing->assertSee('This tracking link is invalid or has expired.')
             ->assertDontSee('delivery_id');
-        $expired->assertSee('Tracking session unavailable')
+        $expired->assertSee('This tracking link is invalid or has expired.')
             ->assertDontSee('delivery_id');
         $this->assertStringNotContainsString((string) $delivery->public_tracking_token, $expired->getContent());
     }

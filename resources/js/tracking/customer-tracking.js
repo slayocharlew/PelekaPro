@@ -1,6 +1,6 @@
-import { disconnectEcho, getEcho } from '../echo';
-import { CustomerTrackingMap } from './map-adapter';
-import { CustomerFirebaseTracking } from './firebase-tracking';
+import { disconnectEcho, getEcho } from '../echo.js';
+import { CustomerTrackingMap } from './map-adapter.js';
+import { CustomerFirebaseTracking } from './firebase-tracking.js';
 import {
     ACTIVE_STATUSES,
     STATUS_PRESENTATION,
@@ -15,12 +15,18 @@ import {
     validateSnapshot,
     validateTrackingStatusEvent,
     validateTerminalEvent,
-} from './state';
+} from './state.js';
 
 const SNAPSHOT_DEBOUNCE_MS = 1_500;
 const SNAPSHOT_RETRY_MS = 10_000;
+const EXPIRED_MESSAGE = 'This tracking link or session is invalid or has expired. Tracking is no longer available.';
+const TERMINAL_MESSAGES = Object.freeze({
+    delivered: { title: 'Delivery completed', message: 'Your delivery is complete. Live tracking has ended.' },
+    failed: { title: 'Delivery unsuccessful', message: 'This delivery could not be completed. Live tracking has ended.' },
+    cancelled: { title: 'Delivery cancelled', message: 'This delivery was cancelled. Live tracking has ended.' },
+});
 
-class CustomerTrackingPage {
+export class CustomerTrackingPage {
     constructor(root) {
         this.root = root;
         this.snapshotUrl = root.dataset.snapshotUrl;
@@ -43,7 +49,9 @@ class CustomerTrackingPage {
         this.channel = null;
         this.channelName = null;
         this.snapshotPromise = null;
+        this.snapshotAbortController = null;
         this.snapshotTimer = null;
+        this.snapshotRetryTimer = null;
         this.staleTimer = null;
         this.relativeTimeTimer = null;
         this.pendingFirebaseLocation = null;
@@ -70,18 +78,15 @@ class CustomerTrackingPage {
             loading: byId('tracking-loading'),
             content: byId('tracking-content'),
             alert: byId('tracking-alert'),
-            code: byId('tracking-code'),
             statusChip: byId('tracking-status-chip'),
             statusLabel: byId('tracking-status-label'),
             statusMessage: byId('tracking-status-message'),
             connection: byId('tracking-connection'),
             connectionLabel: byId('tracking-connection-label'),
             updatedTime: byId('tracking-updated-time'),
-            accuracy: byId('tracking-accuracy'),
-            speed: byId('tracking-speed'),
-            heading: byId('tracking-heading'),
-            latitude: byId('tracking-latitude'),
-            longitude: byId('tracking-longitude'),
+            driverAvatar: byId('tracking-driver-avatar'),
+            driverName: byId('tracking-driver-name'),
+            driverVehicle: byId('tracking-driver-vehicle'),
             liveBadge: byId('tracking-live-badge'),
             map: byId('tracking-map'),
             mapPlaceholder: byId('tracking-map-placeholder'),
@@ -128,6 +133,10 @@ class CustomerTrackingPage {
                     },
                 });
 
+                if (this.ended) {
+                    return;
+                }
+
                 if (!response.ok) {
                     throw new Error('The tracking session could not be ended.');
                 }
@@ -138,8 +147,10 @@ class CustomerTrackingPage {
                     'ended'
                 );
             } catch {
-                this.showAlert('We could not end this tracking session. Check your connection and try again.');
-                this.elements.endButton.disabled = false;
+                if (!this.ended) {
+                    this.showAlert('We could not end this tracking session. Check your connection and try again.');
+                    this.elements.endButton.disabled = false;
+                }
             }
         });
     }
@@ -189,20 +200,32 @@ class CustomerTrackingPage {
     }
 
     async fetchSnapshot() {
+        if (this.ended) {
+            return;
+        }
+
+        const controller = new AbortController();
+        this.snapshotAbortController = controller;
+
         try {
             const response = await fetch(this.snapshotUrl, {
                 method: 'GET',
                 credentials: 'same-origin',
                 cache: 'no-store',
+                signal: controller.signal,
                 headers: {
                     Accept: 'application/json',
                 },
             });
 
+            if (this.ended) {
+                return;
+            }
+
             if (response.status === 401 || response.status === 403) {
                 this.endSession(
                     'Tracking session unavailable',
-                    'This tracking session is invalid or has expired. Please use the original tracking link again.',
+                    EXPIRED_MESSAGE,
                     'expired'
                 );
 
@@ -212,7 +235,7 @@ class CustomerTrackingPage {
             if (response.status === 429) {
                 this.showAlert('Tracking is temporarily busy. We will try again shortly.');
                 this.setConnection('reconnecting', 'Reconnecting');
-                window.setTimeout(() => this.scheduleSnapshot('rate-limit-retry'), 15_000);
+                this.retrySnapshot('rate-limit-retry', 15_000);
 
                 return;
             }
@@ -223,10 +246,14 @@ class CustomerTrackingPage {
 
             const snapshot = validateSnapshot(await response.json());
 
+            if (this.ended) {
+                return;
+            }
+
             if (!snapshot) {
                 this.showAlert('The latest tracking update could not be verified. We will try again.');
                 this.setConnection('reconnecting', 'Reconnecting');
-                window.setTimeout(() => this.scheduleSnapshot('invalid-snapshot'), SNAPSHOT_RETRY_MS);
+                this.retrySnapshot('invalid-snapshot', SNAPSHOT_RETRY_MS);
 
                 return;
             }
@@ -235,9 +262,7 @@ class CustomerTrackingPage {
             this.state = applySnapshot(this.state, snapshot);
             this.render();
 
-            if (this.state.ended) {
-                this.finishTerminalState();
-
+            if (this.ended) {
                 return;
             }
 
@@ -257,9 +282,18 @@ class CustomerTrackingPage {
                     navigator.onLine ? 'reconnecting' : 'offline',
                     navigator.onLine ? 'Reconnecting' : 'Temporarily offline'
                 );
-                window.setTimeout(() => this.scheduleSnapshot('network-retry'), SNAPSHOT_RETRY_MS);
+                this.retrySnapshot('network-retry', SNAPSHOT_RETRY_MS);
+            }
+        } finally {
+            if (this.snapshotAbortController === controller) {
+                this.snapshotAbortController = null;
             }
         }
+    }
+
+    retrySnapshot(reason, delay) {
+        window.clearTimeout(this.snapshotRetryTimer);
+        this.snapshotRetryTimer = window.setTimeout(() => this.scheduleSnapshot(reason), delay);
     }
 
     async subscribeFirebase(credentialsUrl) {
@@ -276,9 +310,11 @@ class CustomerTrackingPage {
         try {
             await this.firebase.connect(credentialsUrl);
         } catch {
-            this.firebaseCredentialsUrl = null;
-            this.setConnection('reconnecting', 'Reconnecting');
-            this.scheduleSnapshot('firebase-connection-failed');
+            if (!this.ended) {
+                this.firebaseCredentialsUrl = null;
+                this.setConnection('reconnecting', 'Reconnecting');
+                this.scheduleSnapshot('firebase-connection-failed');
+            }
         }
     }
 
@@ -374,6 +410,10 @@ class CustomerTrackingPage {
     }
 
     handleLocationEvent(payload) {
+        if (this.ended) {
+            return;
+        }
+
         const location = validateLocationEvent(payload);
 
         if (!location) {
@@ -412,6 +452,10 @@ class CustomerTrackingPage {
     }
 
     handleFirebaseStatusEvent(payload) {
+        if (this.ended) {
+            return;
+        }
+
         const status = validateTrackingStatusEvent(payload);
 
         if (!status) {
@@ -429,10 +473,7 @@ class CustomerTrackingPage {
         this.state = result.state;
         this.render();
 
-        if (this.state.ended) {
-            this.pendingFirebaseLocation = null;
-            this.finishTerminalState();
-
+        if (this.ended) {
             return;
         }
 
@@ -453,6 +494,10 @@ class CustomerTrackingPage {
     }
 
     handleTerminalEvent(payload) {
+        if (this.ended) {
+            return;
+        }
+
         const terminal = validateTerminalEvent(payload);
 
         if (!terminal) {
@@ -469,19 +514,61 @@ class CustomerTrackingPage {
 
         this.state = result.state;
         this.render();
-        this.finishTerminalState();
     }
 
     render() {
+        if (this.ended) {
+            return;
+        }
+
+        if (this.state.ended) {
+            this.finishTerminalState();
+
+            return;
+        }
+
         this.elements.loading.hidden = true;
         this.elements.content.hidden = false;
-        this.elements.code.textContent = this.state.trackingCode ?? '—';
+        this.renderDriver();
         this.renderStatus();
         this.renderRoute();
         this.renderLocation();
     }
 
+    renderDriver() {
+        const driver = this.state.driver;
+
+        if (!driver) {
+            this.elements.driverAvatar.textContent = 'D';
+            this.elements.driverName.textContent = 'Waiting for assignment';
+            this.elements.driverVehicle.textContent = 'Driver details will appear here.';
+
+            return;
+        }
+
+        const vehicleLabels = {
+            bodaboda: 'Bodaboda',
+            bajaji: 'Bajaji',
+            bicycle: 'Bicycle',
+            car: 'Car',
+            van: 'Van',
+            truck: 'Truck',
+            other: 'Delivery vehicle',
+        };
+        const vehicle = vehicleLabels[driver.vehicleType] ?? 'Delivery rider';
+
+        this.elements.driverAvatar.textContent = driver.name.charAt(0).toLocaleUpperCase();
+        this.elements.driverName.textContent = driver.name;
+        this.elements.driverVehicle.textContent = driver.vehicleNumber
+            ? `${vehicle} · ${driver.vehicleNumber}`
+            : vehicle;
+    }
+
     async renderRoute() {
+        if (this.ended || this.state.ended) {
+            return;
+        }
+
         const routePlan = this.state.routePlan;
         const hasEndpoint = routePlan.origin !== null || routePlan.destination !== null;
 
@@ -494,7 +581,7 @@ class CustomerTrackingPage {
 
         const mapAvailable = await this.map.initialize();
 
-        if (!mapAvailable || this.state.routePlan !== routePlan) {
+        if (this.ended || !mapAvailable || this.state.routePlan !== routePlan) {
             return;
         }
 
@@ -503,7 +590,7 @@ class CustomerTrackingPage {
             : null;
         const routeResult = await this.map.showRoute(routePlan, liveOrigin);
 
-        if (this.state.routePlan !== routePlan || !routeResult.visible) {
+        if (this.ended || this.state.routePlan !== routePlan || !routeResult.visible) {
             return;
         }
 
@@ -541,6 +628,10 @@ class CustomerTrackingPage {
     }
 
     async renderLocation() {
+        if (this.ended || this.state.ended) {
+            return;
+        }
+
         window.clearTimeout(this.staleTimer);
         const hasFreshLocation = this.state.liveLocationAvailable
             && locationIsFresh(this.state.location);
@@ -586,7 +677,7 @@ class CustomerTrackingPage {
         }
 
         if (mapAvailable) {
-            this.map.showLocation(location, this.state.routePlan.destination);
+            this.map.showLocation(location, this.state.routePlan.destination, this.state.driver);
             this.elements.mapPlaceholder.hidden = true;
 
             this.map.refreshRemainingRoute(this.state.routePlan, location).then((refreshed) => {
@@ -602,22 +693,11 @@ class CustomerTrackingPage {
         } else {
             this.showMapMessage(
                 'Live position received',
-                'The map view is temporarily unavailable. The latest GPS details are shown below.'
+                'The map view is temporarily unavailable. We will reconnect automatically.'
             );
         }
 
         this.elements.liveBadge.hidden = false;
-        this.elements.latitude.textContent = location.latitude.toFixed(6);
-        this.elements.longitude.textContent = location.longitude.toFixed(6);
-        this.elements.accuracy.textContent = location.accuracy === null
-            ? 'Not reported'
-            : `Within ${Math.round(location.accuracy)} m`;
-        this.elements.speed.textContent = location.speed === null
-            ? 'Not reported'
-            : `${Math.round(location.speed * 3.6)} km/h`;
-        this.elements.heading.textContent = location.heading === null
-            ? 'Not reported'
-            : `${Math.round(location.heading)}°`;
         this.renderTime();
 
         const staleIn = Math.max(0, Date.parse(location.recordedAt) + 90_000 - Date.now());
@@ -638,7 +718,7 @@ class CustomerTrackingPage {
         const location = this.state.location;
 
         if (!location) {
-            this.elements.updatedTime.textContent = 'Not available';
+            this.elements.updatedTime.textContent = 'Location not available';
             this.elements.updatedTime.removeAttribute('datetime');
 
             return;
@@ -664,11 +744,6 @@ class CustomerTrackingPage {
     }
 
     clearLocationDetails() {
-        this.elements.latitude.textContent = '—';
-        this.elements.longitude.textContent = '—';
-        this.elements.accuracy.textContent = '—';
-        this.elements.speed.textContent = '—';
-        this.elements.heading.textContent = '—';
         this.renderTime();
     }
 
@@ -679,32 +754,52 @@ class CustomerTrackingPage {
     }
 
     finishTerminalState() {
+        const status = this.state.status;
+        const presentation = TERMINAL_MESSAGES[status];
+
+        if (this.ended || !presentation) {
+            return;
+        }
+
+        this.endSession(presentation.title, presentation.message, 'ended');
+        this.state.status = status;
+    }
+
+    endSession(title, message, connectionState) {
+        if (this.ended) {
+            return;
+        }
+
         this.ended = true;
+        this.state = createInitialState();
+        this.state.ended = true;
+        this.pendingFirebaseLocation = null;
+        this.snapshotAbortController?.abort();
+        this.snapshotAbortController = null;
         this.leaveChannel();
         this.firebase.disconnect();
         this.firebaseCredentialsUrl = null;
         disconnectEcho();
         this.echo = null;
-        this.map.hideLocation();
-        this.setConnection('ended', 'Tracking ended');
-        this.elements.liveBadge.hidden = true;
-    }
-
-    endSession(title, message, connectionState) {
-        this.ended = true;
-        this.state = createInitialState();
-        this.state.ended = true;
-        this.leaveChannel();
-        this.firebase.disconnect();
-        this.firebaseCredentialsUrl = null;
-        disconnectEcho();
         this.map.destroy();
+        this.elements.map.replaceChildren();
         window.clearTimeout(this.snapshotTimer);
+        window.clearTimeout(this.snapshotRetryTimer);
         window.clearTimeout(this.staleTimer);
         window.clearTimeout(this.sessionExpiryTimer);
         window.clearInterval(this.relativeTimeTimer);
         this.elements.loading.hidden = true;
         this.elements.content.hidden = true;
+        this.elements.liveBadge.hidden = true;
+        this.elements.routeNotice.hidden = true;
+        this.elements.routeNotice.textContent = '';
+        this.elements.driverAvatar.textContent = '';
+        this.elements.driverName.textContent = '';
+        this.elements.driverVehicle.textContent = '';
+        this.elements.updatedTime.textContent = '';
+        this.elements.updatedTime.removeAttribute('datetime');
+        this.elements.updatedTime.removeAttribute('title');
+        this.elements.updatedTime.removeAttribute('aria-label');
         this.elements.ended.hidden = false;
         this.elements.endedTitle.textContent = title;
         this.elements.endedMessage.textContent = message;
@@ -749,7 +844,7 @@ class CustomerTrackingPage {
         this.sessionExpiryTimer = window.setTimeout(() => {
             this.endSession(
                 'Tracking session unavailable',
-                'This tracking session is invalid or has expired. Please use the original tracking link again.',
+                EXPIRED_MESSAGE,
                 'expired'
             );
         }, delay);

@@ -128,7 +128,20 @@ test('customer map computes a layered remaining route without recalculating on e
     assert.equal(source.includes('recorded_at'), false);
 });
 
-test('terminal delivery state still allows the static pickup-to-destination route to finish rendering', async () => {
+test('live marker is a rider motorcycle and labels the assigned driver safely', async () => {
+    const source = await import('node:fs/promises').then(({ readFile }) => readFile(
+        new URL('../../resources/js/tracking/map-adapter.js', import.meta.url),
+        'utf8'
+    ));
+
+    assert.match(source, /<circle cx="8" cy="23\.5"/);
+    assert.match(source, /<circle cx="24" cy="23\.5"/);
+    assert.match(source, /setMarkerDriver\(container, driver\)/);
+    assert.match(source, /label\.textContent = firstName \|\| 'Rider'/);
+    assert.doesNotMatch(source, /label\.innerHTML/);
+});
+
+test('terminal delivery state blocks rendering the static pickup-to-destination route', async () => {
     const source = await import('node:fs/promises').then(({ readFile }) => readFile(
         new URL('../../resources/js/tracking/customer-tracking.js', import.meta.url),
         'utf8'
@@ -138,6 +151,8 @@ test('terminal delivery state still allows the static pickup-to-destination rout
         source.indexOf('renderStatus()', source.indexOf('async renderRoute()'))
     );
 
-    assert.equal(renderRoute.includes('this.ended'), false);
+    assert.match(renderRoute, /if \(this\.ended \|\| this\.state\.ended\)/);
+    assert.match(renderRoute, /if \(this\.ended \|\| !mapAvailable/);
+    assert.match(renderRoute, /if \(this\.ended \|\| this\.state\.routePlan !== routePlan/);
     assert.match(renderRoute, /this\.state\.routePlan !== routePlan/);
 });

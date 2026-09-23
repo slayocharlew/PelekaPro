@@ -16,6 +16,24 @@ The browser may contact Laravel again only for explicit logout or recovery after
 an invalid/missing Firebase configuration, authorization failure, or malformed
 transport data. It does not poll merely to discover that the driver started.
 
+## End-of-delivery access
+
+`delivered`, `failed` and `cancelled` immediately close customer tracking access
+using the authoritative MySQL delivery status. Laravel rejects a new token-link
+entry, an existing customer cookie, snapshots, Firebase credential issuance and
+new private-channel authorization for these deliveries. The stored token and
+delivery, payment and location records are not deleted or rotated.
+
+An already-open page receives the existing Firebase terminal status (or the
+Reverb fallback event), removes the map, route and driver information, stops its
+listeners and timers, and shows **Delivery completed**, **Delivery unsuccessful**
+or **Delivery cancelled**. Pending map/snapshot results cannot restart tracking.
+Refreshing or reopening the link shows the same generic unavailable/expired
+page used for invalid links, without revealing the delivery or its outcome.
+No extra polling or expiry database column is required. Firebase rules continue
+to deny live-location reads/writes after control is revoked; the minimal terminal
+status remains available to existing authorized listeners so they can finish.
+
 ## Write policy
 
 The driver may advance one `/live` child approximately every five seconds. Each

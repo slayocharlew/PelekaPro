@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\DeliveryDriverController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\DriverDeliveryWorkflowController;
 use App\Http\Controllers\Api\DriverLocationController;
+use App\Http\Controllers\Api\DriverMapUsageController;
 use App\Http\Controllers\Api\FirebaseTrackingCredentialController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,10 @@ Route::middleware(['auth:sanctum', 'active.api.user'])->group(function (): void 
 
     Route::get('driver/deliveries', [DriverController::class, 'deliveries'])
         ->name('driver.deliveries');
+
+    Route::post('driver/map-usage', [DriverMapUsageController::class, 'store'])
+        ->middleware('throttle:driver-map-usage')
+        ->name('driver.map-usage.store');
 
     Route::get('driver/deliveries/{delivery}', [DriverDeliveryWorkflowController::class, 'show'])
         ->name('driver.deliveries.show');

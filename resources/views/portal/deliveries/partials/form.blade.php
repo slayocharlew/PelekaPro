@@ -1,5 +1,6 @@
 @php
     $editing = isset($delivery);
+    $customerDetailsLocked = $editing && ($customerDetailsLocked ?? false);
     $selectedBusinessId = old('business_id', $editing ? $delivery->business_id : auth('web')->user()->business_id);
     $selectedBranchId = old('branch_id', $editing ? $delivery->branch_id : auth('web')->user()->branch_id);
     $itemRows = old('items', $editing
@@ -64,7 +65,7 @@
             @error('branch_id') <p class="portal-field__error">{{ $message }}</p> @enderror
         </div>
 
-        @if ($editing)
+        @if ($editing && ! $customerDetailsLocked)
             <div class="portal-field">
                 <label for="existing_customer_name">Customer</label>
                 <input id="existing_customer_name" type="text" value="{{ $delivery->customer->name }}" disabled>
@@ -79,7 +80,7 @@
                     <input id="existing_customer_email" type="email" value="{{ $delivery->customer->email }}" disabled>
                 </div>
             @endif
-        @else
+        @elseif (! $editing)
             <div class="portal-field">
                 <label for="customer_name">Customer name <span aria-hidden="true">*</span></label>
                 <input id="customer_name" name="customer_name" type="text" maxlength="255" autocomplete="name" value="{{ old('customer_name') }}" required>
@@ -133,33 +134,43 @@
 
         <fieldset class="portal-fieldset">
             <legend>Drop-off</legend>
-            <div class="portal-field">
-                <label for="dropoff_name">Recipient name {{ $editing ? '' : '(if different)' }}</label>
-                <input id="dropoff_name" name="dropoff_name" type="text" maxlength="255" value="{{ old('dropoff_name', $editing ? $delivery->dropoff_name : '') }}">
-                @error('dropoff_name') <p class="portal-field__error">{{ $message }}</p> @enderror
-            </div>
-            <div class="portal-field">
-                <label for="dropoff_phone">Recipient phone {{ $editing ? '' : '(if different)' }}</label>
-                <input id="dropoff_phone" name="dropoff_phone" type="tel" maxlength="255" value="{{ old('dropoff_phone', $editing ? $delivery->dropoff_phone : '') }}">
-                @error('dropoff_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
-            </div>
-            <div class="portal-field">
-                <label for="dropoff_address">Address</label>
-                <textarea id="dropoff_address" name="dropoff_address" rows="3" maxlength="255">{{ old('dropoff_address', $editing ? $delivery->dropoff_address : '') }}</textarea>
-                @error('dropoff_address') <p class="portal-field__error">{{ $message }}</p> @enderror
-            </div>
-            <div class="portal-coordinate-grid">
+            @if ($customerDetailsLocked)
+                @include('portal.deliveries.partials.customer-provided-details', [
+                    'name' => $delivery->dropoff_name,
+                    'phone' => $delivery->dropoff_phone,
+                    'address' => $delivery->dropoff_address,
+                    'latitude' => $delivery->dropoff_latitude,
+                    'longitude' => $delivery->dropoff_longitude,
+                ])
+            @else
                 <div class="portal-field">
-                    <label for="dropoff_latitude">Latitude</label>
-                    <input id="dropoff_latitude" name="dropoff_latitude" type="number" step="0.0000001" min="-90" max="90" value="{{ old('dropoff_latitude', $editing ? $delivery->dropoff_latitude : '') }}">
-                    @error('dropoff_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+                    <label for="dropoff_name">Recipient name {{ $editing ? '' : '(if different)' }}</label>
+                    <input id="dropoff_name" name="dropoff_name" type="text" maxlength="255" value="{{ old('dropoff_name', $editing ? $delivery->dropoff_name : '') }}">
+                    @error('dropoff_name') <p class="portal-field__error">{{ $message }}</p> @enderror
                 </div>
                 <div class="portal-field">
-                    <label for="dropoff_longitude">Longitude</label>
-                    <input id="dropoff_longitude" name="dropoff_longitude" type="number" step="0.0000001" min="-180" max="180" value="{{ old('dropoff_longitude', $editing ? $delivery->dropoff_longitude : '') }}">
-                    @error('dropoff_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+                    <label for="dropoff_phone">Recipient phone {{ $editing ? '' : '(if different)' }}</label>
+                    <input id="dropoff_phone" name="dropoff_phone" type="tel" maxlength="255" value="{{ old('dropoff_phone', $editing ? $delivery->dropoff_phone : '') }}">
+                    @error('dropoff_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
                 </div>
-            </div>
+                <div class="portal-field">
+                    <label for="dropoff_address">Address</label>
+                    <textarea id="dropoff_address" name="dropoff_address" rows="3" maxlength="255">{{ old('dropoff_address', $editing ? $delivery->dropoff_address : '') }}</textarea>
+                    @error('dropoff_address') <p class="portal-field__error">{{ $message }}</p> @enderror
+                </div>
+                <div class="portal-coordinate-grid">
+                    <div class="portal-field">
+                        <label for="dropoff_latitude">Latitude</label>
+                        <input id="dropoff_latitude" name="dropoff_latitude" type="number" step="0.0000001" min="-90" max="90" value="{{ old('dropoff_latitude', $editing ? $delivery->dropoff_latitude : '') }}">
+                        @error('dropoff_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+                    </div>
+                    <div class="portal-field">
+                        <label for="dropoff_longitude">Longitude</label>
+                        <input id="dropoff_longitude" name="dropoff_longitude" type="number" step="0.0000001" min="-180" max="180" value="{{ old('dropoff_longitude', $editing ? $delivery->dropoff_longitude : '') }}">
+                        @error('dropoff_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+                    </div>
+                </div>
+            @endif
         </fieldset>
     </div>
 </section>

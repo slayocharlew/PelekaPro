@@ -17,164 +17,113 @@
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="tracking-page">
+    <body class="tracking-page tracking-page--live-map">
         <div
             id="customer-tracking-app"
-            class="tracking-shell"
+            class="tracking-shell tracking-shell--live-map"
             data-customer-tracking
             data-snapshot-url="{{ route('customer.tracking.session.show', absolute: false) }}"
             data-session-delete-url="{{ route('customer.tracking.session.destroy', absolute: false) }}"
             data-session-expires-at="{{ $trackingSessionExpiresAt }}"
         >
-            <header class="tracking-header">
-                <div class="tracking-container tracking-header__inner">
-                    @include('tracking.partials.brand')
+            <main class="tracking-live-map-main">
+                <div id="tracking-alert" class="tracking-alert tracking-alert--map-overlay" role="alert" hidden></div>
 
-                    <div
-                        id="tracking-connection"
-                        class="connection-pill connection-pill--connecting"
-                        role="status"
-                        aria-live="polite"
-                    >
-                        <span class="connection-pill__dot" aria-hidden="true"></span>
-                        <span id="tracking-connection-label">Connecting securely</span>
+                <section id="tracking-loading" class="tracking-loading tracking-loading--map" aria-live="polite">
+                    <span class="tracking-spinner" aria-hidden="true"></span>
+                    <div>
+                        <strong>Loading your delivery</strong>
+                        <p>Connecting to the rider’s live location…</p>
                     </div>
-                </div>
-            </header>
+                </section>
 
-            <main class="tracking-main">
-                <div class="tracking-container">
-                    <div id="tracking-alert" class="tracking-alert" role="alert" hidden></div>
+                <div id="tracking-content" class="tracking-map-experience" hidden>
+                    <section class="tracking-map-stage" aria-labelledby="map-heading">
+                        <h1 id="map-heading" class="sr-only">Live rider map</h1>
 
-                    <section id="tracking-loading" class="tracking-loading" aria-live="polite">
-                        <span class="tracking-spinner" aria-hidden="true"></span>
-                        <div>
-                            <strong>Loading your delivery</strong>
-                            <p>Checking the latest secure tracking information…</p>
-                        </div>
-                    </section>
+                        <div id="tracking-map-frame" class="tracking-map-frame tracking-map-frame--fullscreen">
+                            <div
+                                id="tracking-map"
+                                class="tracking-map"
+                                data-map-usage-url="{{ app(\App\Services\MapUsageService::class)->reportingUrl('customer_tracking') }}"
+                                role="application"
+                                aria-label="Live rider route from pickup to customer destination"
+                            ></div>
 
-                    <div id="tracking-content" class="tracking-layout" hidden>
-                        <aside class="tracking-summary" aria-labelledby="delivery-heading">
-                            <div class="tracking-summary__eyebrow">Delivery</div>
-                            <h1 id="delivery-heading">
-                                <span class="sr-only">Tracking code </span>
-                                <span id="tracking-code">—</span>
-                            </h1>
-
-                            <div class="tracking-status-card">
-                                <div id="tracking-status-chip" class="status-chip status-chip--pending">
-                                    <span class="status-chip__icon" aria-hidden="true"></span>
-                                    <span id="tracking-status-label">Checking status</span>
+                            <div id="tracking-map-placeholder" class="tracking-map-placeholder tracking-map-placeholder--fullscreen">
+                                <div class="tracking-map-placeholder__icon" aria-hidden="true">
+                                    <svg viewBox="0 0 64 64">
+                                        <path d="m8 15 15-7 18 7 15-7v41l-15 7-18-7-15 7V15Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+                                        <path d="M23 8v41M41 15v41" fill="none" stroke="currentColor" stroke-width="3"/>
+                                        <circle cx="33" cy="29" r="7" fill="currentColor"/>
+                                    </svg>
                                 </div>
-                                <p id="tracking-status-message" role="status" aria-live="polite">
-                                    We’re loading the latest delivery status.
-                                </p>
+                                <strong id="tracking-map-message-title">Waiting for a live location</strong>
+                                <p id="tracking-map-message">Your delivery has not started moving yet.</p>
                             </div>
 
-                            <dl class="tracking-details">
-                                <div>
-                                    <dt>Last location update</dt>
-                                    <dd>
-                                        <time id="tracking-updated-time" datetime="">Not available</time>
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt>GPS accuracy</dt>
-                                    <dd id="tracking-accuracy">—</dd>
-                                </div>
-                                <div>
-                                    <dt>Current speed</dt>
-                                    <dd id="tracking-speed">—</dd>
-                                </div>
-                                <div>
-                                    <dt>Direction</dt>
-                                    <dd id="tracking-heading">—</dd>
-                                </div>
-                            </dl>
-
-                            <button id="end-tracking-session" class="tracking-end-button" type="button">
-                                <svg viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d="M6.4 5.35A9 9 0 1 0 17.6 5.35M12 3v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                                </svg>
-                                End tracking session
-                            </button>
-
-                            <p class="tracking-privacy-note">
-                                This page shows location only while this delivery has an active tracking session.
-                            </p>
-                        </aside>
-
-                        <section class="tracking-map-card" aria-labelledby="map-heading">
-                            <div class="tracking-map-card__header">
-                                <div>
-                                    <p class="tracking-map-card__eyebrow">Delivery journey</p>
-                                    <h2 id="map-heading">Route and live rider</h2>
-                                </div>
-                                <span id="tracking-live-badge" class="live-badge" hidden>
-                                    <span aria-hidden="true"></span>
-                                    Live
-                                </span>
-                            </div>
-
-                            <div id="tracking-map-frame" class="tracking-map-frame">
+                            <div class="tracking-map-topbar">
+                                <div class="tracking-map-brand">@include('tracking.partials.brand')</div>
                                 <div
-                                    id="tracking-map"
-                                    class="tracking-map"
-                                    role="application"
-                                    aria-label="Delivery route from pickup to destination and live rider position"
-                                ></div>
-                                <div id="tracking-map-placeholder" class="tracking-map-placeholder">
-                                    <div class="tracking-map-placeholder__icon" aria-hidden="true">
-                                        <svg viewBox="0 0 64 64">
-                                            <path d="m8 15 15-7 18 7 15-7v41l-15 7-18-7-15 7V15Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
-                                            <path d="M23 8v41M41 15v41" fill="none" stroke="currentColor" stroke-width="3"/>
-                                            <circle cx="33" cy="29" r="7" fill="currentColor"/>
-                                        </svg>
+                                    id="tracking-connection"
+                                    class="connection-pill connection-pill--connecting"
+                                    role="status"
+                                    aria-live="polite"
+                                >
+                                    <span class="connection-pill__dot" aria-hidden="true"></span>
+                                    <span id="tracking-connection-label">Connecting</span>
+                                </div>
+                            </div>
+
+                            <div id="tracking-route-notice" class="tracking-route-notice tracking-route-notice--map" role="status" aria-live="polite" hidden></div>
+
+                            <section class="tracking-driver-sheet" aria-labelledby="tracking-driver-name">
+                                <div id="tracking-driver-avatar" class="tracking-driver-avatar" aria-hidden="true">D</div>
+
+                                <div class="tracking-driver-identity">
+                                    <span>Your driver</span>
+                                    <h2 id="tracking-driver-name">Waiting for assignment</h2>
+                                    <p id="tracking-driver-vehicle">Driver details will appear here.</p>
+                                    <time id="tracking-updated-time" datetime="">Location not available</time>
+                                </div>
+
+                                <div class="tracking-driver-actions">
+                                    <span id="tracking-live-badge" class="live-badge" hidden>
+                                        <span aria-hidden="true"></span>
+                                        Live
+                                    </span>
+                                    <button id="end-tracking-session" class="tracking-end-button tracking-end-button--compact" type="button">
+                                        Close tracking
+                                    </button>
+                                </div>
+
+                                <div class="tracking-driver-status">
+                                    <div id="tracking-status-chip" class="status-chip status-chip--pending">
+                                        <span class="status-chip__icon" aria-hidden="true"></span>
+                                        <span id="tracking-status-label">Checking status</span>
                                     </div>
-                                    <strong id="tracking-map-message-title">Waiting for a live location</strong>
-                                    <p id="tracking-map-message">
-                                        Your delivery has not started moving yet.
+                                    <p id="tracking-status-message" role="status" aria-live="polite">
+                                        We’re loading the latest delivery status.
                                     </p>
                                 </div>
-                                <div id="tracking-route-notice" class="tracking-route-notice" role="status" aria-live="polite" hidden></div>
-                            </div>
-
-                            <div class="tracking-map-footer">
-                                <div>
-                                    <span>Latitude</span>
-                                    <strong id="tracking-latitude">—</strong>
-                                </div>
-                                <div>
-                                    <span>Longitude</span>
-                                    <strong id="tracking-longitude">—</strong>
-                                </div>
-                            </div>
-                        </section>
-                    </div>
-
-                    <section id="tracking-ended" class="tracking-ended" hidden aria-live="polite">
-                        <div class="tracking-ended__icon" aria-hidden="true">
-                            <svg viewBox="0 0 48 48">
-                                <path d="M24 43a19 19 0 1 0 0-38 19 19 0 0 0 0 38Z" fill="none" stroke="currentColor" stroke-width="3"/>
-                                <path d="m15.5 24 5.5 5.5L33 17.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
+                            </section>
                         </div>
-                        <h1 id="tracking-ended-title">Tracking session ended</h1>
-                        <p id="tracking-ended-message">
-                            This browser is no longer connected to the delivery tracking session.
-                        </p>
                     </section>
                 </div>
-            </main>
 
-            <footer class="tracking-footer">
-                <div class="tracking-container">
-                    <span>Secure delivery tracking by PelekaPro</span>
-                    <span aria-hidden="true">·</span>
-                    <span>Location is shared only during an active delivery</span>
-                </div>
-            </footer>
+                <section id="tracking-ended" class="tracking-ended tracking-ended--map-overlay" hidden aria-live="polite">
+                    <div class="tracking-ended__icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48">
+                            <path d="M24 43a19 19 0 1 0 0-38 19 19 0 0 0 0 38Z" fill="none" stroke="currentColor" stroke-width="3"/>
+                            <path d="m15.5 24 5.5 5.5L33 17.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h1 id="tracking-ended-title">Tracking session ended</h1>
+                    <p id="tracking-ended-message">
+                        This browser is no longer connected to the delivery tracking session.
+                    </p>
+                </section>
+            </main>
         </div>
     </body>
 </html>

@@ -10,7 +10,7 @@
             'quantity' => $item->quantity,
             'amount' => 0,
             'description' => $item->description,
-        ])->values()->all());
+        ])->values()->all() ?: [['item_name' => '', 'quantity' => 1, 'amount' => 0, 'description' => '']]);
         $customerResolution = old('customer_resolution', $matchingCustomers->isEmpty() ? 'new' : '');
         $selectedBranchId = old(
             'branch_id',
@@ -91,10 +91,16 @@
             <section class="portal-card portal-form-section">
                 <div class="portal-card__header">
                     <div>
-                        <h2>Review customer</h2>
-                        <p>The submitted request remains unchanged; corrections below apply to the official delivery.</p>
+                        <h2>Customer details</h2>
                     </div>
                 </div>
+                @include('portal.deliveries.partials.customer-provided-details', [
+                    'name' => $deliveryRequest->customer_name,
+                    'phone' => $deliveryRequest->customer_phone,
+                    'address' => $deliveryRequest->dropoff_address,
+                    'latitude' => $deliveryRequest->dropoff_latitude,
+                    'longitude' => $deliveryRequest->dropoff_longitude,
+                ])
                 <div class="portal-form-grid">
                     @if ($matchingCustomers->isNotEmpty())
                         <div class="portal-field portal-field--wide">
@@ -121,16 +127,6 @@
                     @endif
 
                     <div class="portal-field">
-                        <label for="customer_name">Customer name <span aria-hidden="true">*</span></label>
-                        <input id="customer_name" name="customer_name" type="text" maxlength="255" value="{{ old('customer_name', $deliveryRequest->customer_name) }}" required>
-                        @error('customer_name') <p class="portal-field__error">{{ $message }}</p> @enderror
-                    </div>
-                    <div class="portal-field">
-                        <label for="customer_phone">Customer phone <span aria-hidden="true">*</span></label>
-                        <input id="customer_phone" name="customer_phone" type="tel" maxlength="30" value="{{ old('customer_phone', $deliveryRequest->customer_phone) }}" required>
-                        @error('customer_phone') <p class="portal-field__error">{{ $message }}</p> @enderror
-                    </div>
-                    <div class="portal-field">
                         <label for="branch_id">Branch</label>
                         <select id="branch_id" name="branch_id" data-branch-pickup-select>
                             <option value="">No branch</option>
@@ -152,28 +148,18 @@
             </section>
 
             <section class="portal-card portal-form-section">
-                <div class="portal-card__header"><div><h2>Pickup and destination</h2></div></div>
-                <div class="portal-form-columns">
-                    <fieldset class="portal-fieldset">
-                        <legend>Pickup</legend>
-                        <div class="portal-field"><label for="pickup_name">Contact name</label><input id="pickup_name" name="pickup_name" type="text" maxlength="255" value="{{ old('pickup_name') }}" data-pickup-name-field>@error('pickup_name') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                        <div class="portal-field"><label for="pickup_phone">Contact phone</label><input id="pickup_phone" name="pickup_phone" type="tel" maxlength="255" value="{{ old('pickup_phone') }}" data-pickup-phone-field>@error('pickup_phone') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                        <div class="portal-field"><label for="pickup_address">Address</label><textarea id="pickup_address" name="pickup_address" rows="3" data-pickup-address-field>{{ old('pickup_address') }}</textarea>@error('pickup_address') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                        <input id="pickup_latitude" name="pickup_latitude" type="hidden" value="{{ old('pickup_latitude') }}" data-pickup-latitude-field>
-                        <input id="pickup_longitude" name="pickup_longitude" type="hidden" value="{{ old('pickup_longitude') }}" data-pickup-longitude-field>
-                        <p class="portal-field__hint" data-branch-pickup-status role="status" aria-live="polite">Select a branch to load its saved pickup location.</p>
-                        @error('pickup_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror
-                        @error('pickup_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror
-                    </fieldset>
-                    <fieldset class="portal-fieldset">
-                        <legend>Customer destination</legend>
-                        <div class="portal-field"><label for="dropoff_address">Address <span aria-hidden="true">*</span></label><textarea id="dropoff_address" name="dropoff_address" rows="3" maxlength="255" required>{{ old('dropoff_address', $deliveryRequest->dropoff_address) }}</textarea>@error('dropoff_address') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                        <div class="portal-coordinate-grid">
-                            <div class="portal-field"><label for="dropoff_latitude">Latitude <span aria-hidden="true">*</span></label><input id="dropoff_latitude" name="dropoff_latitude" type="number" step="0.0000001" min="-90" max="90" value="{{ old('dropoff_latitude', $deliveryRequest->dropoff_latitude) }}" required>@error('dropoff_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                            <div class="portal-field"><label for="dropoff_longitude">Longitude <span aria-hidden="true">*</span></label><input id="dropoff_longitude" name="dropoff_longitude" type="number" step="0.0000001" min="-180" max="180" value="{{ old('dropoff_longitude', $deliveryRequest->dropoff_longitude) }}" required>@error('dropoff_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
-                        </div>
-                    </fieldset>
-                </div>
+                <div class="portal-card__header"><div><h2>Pickup</h2></div></div>
+                <fieldset class="portal-fieldset">
+                    <legend>Pickup</legend>
+                    <div class="portal-field"><label for="pickup_name">Contact name</label><input id="pickup_name" name="pickup_name" type="text" maxlength="255" value="{{ old('pickup_name') }}" data-pickup-name-field>@error('pickup_name') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
+                    <div class="portal-field"><label for="pickup_phone">Contact phone</label><input id="pickup_phone" name="pickup_phone" type="tel" maxlength="255" value="{{ old('pickup_phone') }}" data-pickup-phone-field>@error('pickup_phone') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
+                    <div class="portal-field"><label for="pickup_address">Address</label><textarea id="pickup_address" name="pickup_address" rows="3" data-pickup-address-field>{{ old('pickup_address') }}</textarea>@error('pickup_address') <p class="portal-field__error">{{ $message }}</p> @enderror</div>
+                    <input id="pickup_latitude" name="pickup_latitude" type="hidden" value="{{ old('pickup_latitude') }}" data-pickup-latitude-field>
+                    <input id="pickup_longitude" name="pickup_longitude" type="hidden" value="{{ old('pickup_longitude') }}" data-pickup-longitude-field>
+                    <p class="portal-field__hint" data-branch-pickup-status role="status" aria-live="polite">Select a branch to load its saved pickup location.</p>
+                    @error('pickup_latitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+                    @error('pickup_longitude') <p class="portal-field__error">{{ $message }}</p> @enderror
+                </fieldset>
             </section>
 
             <section class="portal-card portal-form-section">

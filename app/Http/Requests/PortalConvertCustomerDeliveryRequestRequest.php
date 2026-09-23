@@ -30,17 +30,12 @@ class PortalConvertCustomerDeliveryRequestRequest extends FormRequest
         return [
             'customer_resolution' => ['required', Rule::in(['new', 'existing'])],
             'customer_id' => ['nullable', 'required_if:customer_resolution,existing', 'integer', 'exists:customers,id'],
-            'customer_name' => ['required', 'string', 'max:255'],
-            'customer_phone' => ['required', 'string', 'max:30'],
             'branch_id' => ['nullable', 'integer', 'exists:business_branches,id'],
             'pickup_name' => ['nullable', 'string', 'max:255'],
             'pickup_phone' => ['nullable', 'string', 'max:255'],
             'pickup_address' => ['nullable', 'string'],
             'pickup_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'pickup_longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'dropoff_address' => ['required', 'string', 'max:255'],
-            'dropoff_latitude' => ['required', 'numeric', 'between:-90,90'],
-            'dropoff_longitude' => ['required', 'numeric', 'between:-180,180'],
             'payment_method' => ['required', Rule::in(DeliveryManagementService::PAYMENT_METHODS)],
             'amount_to_collect' => ['required', 'numeric', 'min:0'],
             'delivery_fee' => ['required', 'numeric', 'min:0'],
@@ -82,7 +77,7 @@ class PortalConvertCustomerDeliveryRequestRequest extends FormRequest
                 ->whereKey($this->input('customer_id'))
                 ->where('business_id', $deliveryRequest->business_id)
                 ->where('status', 'active')
-                ->where('phone', trim((string) $this->input('customer_phone')))
+                ->where('phone', $deliveryRequest->customer_phone)
                 ->exists();
 
             if (! $validCustomer) {

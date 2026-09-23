@@ -14,6 +14,15 @@ export const DELIVERY_STATUSES = Object.freeze([
 export const TERMINAL_STATUSES = Object.freeze(['delivered', 'failed', 'cancelled']);
 export const ACTIVE_STATUSES = Object.freeze(['on_the_way', 'arrived']);
 export const LIVE_LOCATION_MAX_AGE_MS = 90_000;
+const DRIVER_VEHICLE_TYPES = Object.freeze([
+    'bodaboda',
+    'bajaji',
+    'bicycle',
+    'car',
+    'van',
+    'truck',
+    'other',
+]);
 
 export const STATUS_PRESENTATION = Object.freeze({
     created: {
@@ -148,6 +157,36 @@ function normalizeRouteEndpoint(payload) {
     };
 }
 
+function normalizeDriver(payload) {
+    if (payload === null) {
+        return null;
+    }
+
+    const allowedKeys = ['name', 'vehicle_type', 'vehicle_number'];
+
+    if (!isPlainObject(payload)
+        || Object.keys(payload).some((key) => !allowedKeys.includes(key))
+        || typeof payload.name !== 'string'
+        || payload.name.trim().length < 1
+        || payload.name.length > 255
+        || /[\u0000-\u001F\u007F]/.test(payload.name)
+        || (payload.vehicle_type !== null && !DRIVER_VEHICLE_TYPES.includes(payload.vehicle_type))
+        || (payload.vehicle_number !== null
+            && (typeof payload.vehicle_number !== 'string'
+                || payload.vehicle_number.trim().length < 1
+                || payload.vehicle_number.length > 255
+                || /[\u0000-\u001F\u007F]/.test(payload.vehicle_number)))
+    ) {
+        return undefined;
+    }
+
+    return {
+        name: payload.name.trim(),
+        vehicleType: payload.vehicle_type,
+        vehicleNumber: payload.vehicle_number?.trim() ?? null,
+    };
+}
+
 export function validateSnapshot(payload) {
     const transport = isPlainObject(payload?.transport) ? payload.transport : {
         name: 'reverb',
@@ -158,6 +197,7 @@ export function validateSnapshot(payload) {
         || !isPlainObject(payload.delivery)
         || !isPlainObject(payload.route)
         || !isPlainObject(payload.channel)
+        || !Object.hasOwn(payload, 'driver')
         || typeof payload.delivery.tracking_code !== 'string'
         || !/^[A-Za-z0-9-]{1,64}$/.test(payload.delivery.tracking_code)
         || !DELIVERY_STATUSES.includes(payload.delivery.status)
@@ -177,8 +217,9 @@ export function validateSnapshot(payload) {
 
     const origin = normalizeRouteEndpoint(payload.route.origin);
     const destination = normalizeRouteEndpoint(payload.route.destination);
+    const driver = normalizeDriver(payload.driver);
 
-    if (origin === undefined || destination === undefined) {
+    if (origin === undefined || destination === undefined || driver === undefined) {
         return null;
     }
 
@@ -201,6 +242,7 @@ export function validateSnapshot(payload) {
         status: payload.delivery.status,
         trackingActive: payload.delivery.tracking_active,
         liveLocationAvailable: payload.delivery.live_location_available,
+        driver,
         location,
         routePlan: { origin, destination },
         channelName: payload.channel.name,
@@ -271,6 +313,7 @@ export function createInitialState() {
         status: null,
         trackingActive: false,
         liveLocationAvailable: false,
+        driver: null,
         location: null,
         routePlan: { origin: null, destination: null },
         channelName: null,
@@ -281,15 +324,27 @@ export function createInitialState() {
 }
 
 export function applySnapshot(state, snapshot) {
-    return {
+    if (state.ended) {
+        return state;
+    }
+
+    const nextState = {
         ...state,
         ...snapshot,
-        ended: TERMINAL_STATUSES.includes(snapshot.status),
+        ended: false,
     };
+
+    return TERMINAL_STATUSES.includes(snapshot.status)
+        ? terminalState(nextState)
+        : nextState;
 }
 
 export function applyLocationEvent(state, location) {
-    if (state.ended || !state.trackingActive || !ACTIVE_STATUSES.includes(state.status)) {
+    if (state.ended) {
+        return { state, changed: false, requiresSnapshot: false };
+    }
+
+    if (!state.trackingActive || !ACTIVE_STATUSES.includes(state.status)) {
         return { state, changed: false, requiresSnapshot: true };
     }
 
@@ -316,30 +371,22 @@ export function applyLocationEvent(state, location) {
 }
 
 export function applyTerminalEvent(state, terminal) {
-    if (state.trackingCode && terminal.trackingCode !== state.trackingCode) {
-        return { state, changed: false };
-    }
-
-    if (state.ended && state.status === terminal.status) {
+    if (state.ended || (state.trackingCode && terminal.trackingCode !== state.trackingCode)) {
         return { state, changed: false };
     }
 
     return {
-        state: {
+        state: terminalState({
             ...state,
             trackingCode: terminal.trackingCode,
             status: terminal.status,
-            trackingActive: false,
-            liveLocationAvailable: false,
-            location: null,
-            ended: true,
-        },
+        }),
         changed: true,
     };
 }
 
 export function applyTrackingStatusEvent(state, status) {
-    if (state.trackingCode && status.trackingCode !== state.trackingCode) {
+    if (state.ended || (state.trackingCode && status.trackingCode !== state.trackingCode)) {
         return { state, changed: false };
     }
 
@@ -370,6 +417,23 @@ export function applyTrackingStatusEvent(state, status) {
             || nextState.trackingActive !== state.trackingActive
             || nextState.liveLocationAvailable !== state.liveLocationAvailable
             || nextState.location !== state.location,
+    };
+}
+
+function terminalState(state) {
+    return {
+        ...state,
+        trackingActive: false,
+        liveLocationAvailable: false,
+        driver: null,
+        location: null,
+        routePlan: { origin: null, destination: null },
+        channelName: null,
+        locationEvent: null,
+        statusEvent: null,
+        transportName: null,
+        firebaseCredentialsUrl: null,
+        ended: true,
     };
 }
 

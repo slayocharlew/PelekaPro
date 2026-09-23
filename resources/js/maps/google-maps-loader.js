@@ -1,3 +1,5 @@
+import { instrumentMapConstructor } from './map-usage.js';
+
 const GOOGLE_MAPS_URL = 'https://maps.googleapis.com/maps/api/js';
 const CALLBACK_NAME = '__pelekaproGoogleMapsReady';
 
@@ -97,7 +99,7 @@ async function importLibraries() {
     ]);
 
     return {
-        Map,
+        Map: instrumentMapConstructor(Map),
         AdvancedMarkerElement,
         LatLngBounds,
         Route,

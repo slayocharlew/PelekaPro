@@ -1,6 +1,41 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { validCoordinate } from '../../resources/js/delivery-request.js';
+
+test('customer form has only contact, address and map inputs; item entry stays in the owner portal', async () => {
+    const source = await readFile(
+        new URL('../../resources/views/delivery-request/show.blade.php', import.meta.url),
+        'utf8'
+    );
+    const script = await readFile(
+        new URL('../../resources/js/delivery-request.js', import.meta.url),
+        'utf8'
+    );
+
+    assert.deepEqual([...source.matchAll(/\bname="([^"]+)"/g)]
+        .map((match) => match[1])
+        .filter((name) => name.startsWith('customer_') || name.startsWith('dropoff_')), [
+        'customer_name', 'customer_phone', 'dropoff_address', 'dropoff_latitude', 'dropoff_longitude',
+    ]);
+    assert.equal(source.includes('name="items['), false);
+    assert.equal(source.includes('name="special_instruction"'), false);
+    assert.equal(script.includes('initializeRequestItems'), false);
+    assert.equal(script.includes('data-add-request-item'), false);
+});
+
+test('location must be selected: empty fields cannot turn into a zero-coordinate map pin', () => {
+    for (const value of [null, undefined, '', '  ', false, true, [], {}, NaN, Infinity, 'invalid']) {
+        assert.equal(validCoordinate(value, -90, 90), false);
+    }
+
+    assert.equal(validCoordinate(0, -90, 90), true);
+    assert.equal(validCoordinate('0', -180, 180), true);
+    assert.equal(validCoordinate('-6.7750000', -90, 90), true);
+    assert.equal(validCoordinate('39.2500000', -180, 180), true);
+    assert.equal(validCoordinate(91, -90, 90), false);
+    assert.equal(validCoordinate(-181, -180, 180), false);
+});
 
 test('delivery request frontend uses Google Maps and accepts GPS or a draggable map pin', async () => {
     const source = await readFile(

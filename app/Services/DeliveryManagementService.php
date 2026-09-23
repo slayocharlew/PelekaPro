@@ -230,6 +230,19 @@ class DeliveryManagementService
 
             $fromStatus = $lockedDelivery->status;
             $deliveryData = $this->deliveryPayload($payload);
+
+            if ($this->hasCustomerProvidedDetails($lockedDelivery)) {
+                $deliveryData = Arr::except($deliveryData, [
+                    'customer_id',
+                    'customer_address_id',
+                    'dropoff_name',
+                    'dropoff_phone',
+                    'dropoff_address',
+                    'dropoff_latitude',
+                    'dropoff_longitude',
+                ]);
+            }
+
             $this->applyBranchPickupDefaults($deliveryData, $lockedDelivery->business_id);
 
             if (array_key_exists('assigned_driver_id', $deliveryData)
@@ -328,6 +341,12 @@ class DeliveryManagementService
     {
         return $delivery->started_at === null
             && ! in_array($delivery->status, self::LOCKED_STATUSES, true);
+    }
+
+    public function hasCustomerProvidedDetails(Delivery $delivery): bool
+    {
+        // Archiving a request must not unlock its customer's submitted details.
+        return $delivery->sourceCustomerDeliveryRequest()->withTrashed()->exists();
     }
 
     public function isCancellable(Delivery $delivery): bool

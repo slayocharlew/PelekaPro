@@ -30,6 +30,11 @@ final class CustomerTrackingSnapshotService
      *         tracking_active: bool,
      *         live_location_available: bool
      *     },
+     *     driver: array{
+     *         name: string,
+     *         vehicle_type: string|null,
+     *         vehicle_number: string|null
+     *     }|null,
      *     route: array{
      *         origin: array{latitude: float, longitude: float}|null,
      *         destination: array{latitude: float, longitude: float}|null
@@ -68,6 +73,7 @@ final class CustomerTrackingSnapshotService
                 'tracking_active' => $trackingActive,
                 'live_location_available' => $liveLocation !== null,
             ],
+            'driver' => $this->customerSafeDriver($delivery),
             'route' => [
                 'origin' => $this->coordinatePair(
                     $delivery->pickup_latitude,
@@ -90,6 +96,44 @@ final class CustomerTrackingSnapshotService
                     ? route('customer.tracking.firebase-credentials', absolute: false)
                     : null,
             ],
+        ];
+    }
+
+    /**
+     * @return array{name: string, vehicle_type: string|null, vehicle_number: string|null}|null
+     */
+    private function customerSafeDriver(Delivery $delivery): ?array
+    {
+        $driver = $delivery->assignedDriver;
+        $profile = $driver?->driverProfile;
+
+        if (! $driver
+            || ! $driver->isDriver()
+            || $driver->status !== 'active'
+            || (string) $driver->business_id !== (string) $delivery->business_id
+            || ! $profile
+            || $profile->trashed()
+            || $profile->current_status === 'suspended'
+            || (string) $profile->business_id !== (string) $delivery->business_id
+        ) {
+            return null;
+        }
+
+        $name = trim((string) $driver->name);
+
+        if ($name === '') {
+            return null;
+        }
+
+        $vehicleType = in_array($profile->vehicle_type, DriverRegistrationService::VEHICLE_TYPES, true)
+            ? $profile->vehicle_type
+            : null;
+        $vehicleNumber = trim((string) ($profile->vehicle_number ?? ''));
+
+        return [
+            'name' => $name,
+            'vehicle_type' => $vehicleType,
+            'vehicle_number' => $vehicleNumber !== '' ? $vehicleNumber : null,
         ];
     }
 

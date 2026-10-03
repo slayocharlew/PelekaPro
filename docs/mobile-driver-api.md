@@ -7,6 +7,34 @@ resources, policies, services, and feature tests in this repository.
 The Flutter application is a driver application. Owner and administrator APIs
 are intentionally outside its responsibility.
 
+## Security update — 3 October 2026
+
+There are **no new mobile endpoints, request fields, or successful-response
+fields** in this hardening release. Existing Sanctum login and driver APIs keep
+their contracts. The mobile client needs to verify these error-handling cases:
+
+- `401`: stop GPS and pending private work, detach Firebase listeners, sign out
+  of Firebase, erase in-memory Firebase credentials and the securely stored
+  Sanctum token, then show login. Do not retry the same revoked token.
+- `403`: do not repeatedly retry a blocked account/profile or unauthorized
+  delivery; stop the affected tracking operation and reconcile safely.
+- `429`: respect the `Retry-After` response header before retrying. The general
+  API budget is shared across all requests and tokens for a user, not a separate
+  allowance for every screen or delivery. See the limits below.
+- Known weak development passwords have a local rotation procedure that
+  revokes all Sanctum tokens for the affected accounts. Obtain the replacement
+  password privately from the administrator; never embed it in Flutter or Git.
+
+Browser CORS is now same-origin by default. Native Android clients and Postman
+are unaffected: they still send header-only bearer tokens and do not need a
+CSRF token or an `Origin` workaround. Browser-based API tooling hosted on a
+different origin needs an explicit administrator-approved CORS origin.
+
+This update does not change the roughly five-second direct Firebase live-point
+overwrite, introduce Laravel polling, or require re-consuming every API. Check
+the central API client's `401`/`403`/`429` handling and re-login if its token was
+revoked. The Flutter repository itself is not changed by this backend update.
+
 ## 1. Architecture and responsibilities
 
 ```text
@@ -18,7 +46,7 @@ Authorization, workflow rules, transactions, and validation
         ↓
 MySQL authoritative workflow and start/end GPS evidence
         ↓
-Firebase RTDB intermediate history + current live point
+Firebase RTDB one replaceable current live point + lifecycle status
 ```
 
 ### Flutter is responsible for
@@ -144,6 +172,25 @@ event. A `public_tracking_token` is not an API credential.
 ## 3. Endpoint summary
 
 All routes except login use both `auth:sanctum` and `active.api.user`.
+They also use `throttle:api-user`; an IP limiter runs before API authentication.
+
+### Request limits
+
+Defaults are per minute. Every applicable limit must permit the request:
+
+| Scope | Limit | Notes |
+|---|---|---|
+| All `/api/*` requests | 300 per IP | Includes unauthenticated and invalid-token requests; shared networks share this budget |
+| All protected API routes | 120 per user | Shared across endpoints, deliveries, devices, tokens and IP addresses |
+| Login | 5 per identifier + IP, and 20 per IP | IP login budget is shared with portal login even when the identifier changes |
+| Legacy Laravel GPS endpoint | 12 per user + delivery | Existing GPS limit unchanged |
+| Firebase credential endpoint | 6 per user + delivery | Renew near lease expiry, not every GPS sample |
+| Driver map-opening reports | 30 per user | Only actual map creation, not GPS updates |
+
+The administrator may tune the general API/login limits through documented
+`PELEKAPRO_*_LIMIT` settings. Mobile must read the server's `Retry-After`, rather
+than hardcode these allowances. Direct Firebase writes do not consume Laravel's
+API budget; they remain subject to Firebase rules and credential expiry.
 
 | Method | Endpoint | Mobile responsibility | Backend responsibility |
 |---|---|---|---|
@@ -209,13 +256,26 @@ Other failures normally use:
 | `404` | Route-model delivery does not exist or is unavailable | Remove stale navigation and refresh assigned list |
 | `409` | Delivery state transition or tracking state is no longer valid | Stop GPS when relevant and refetch delivery |
 | `422` | Invalid credentials, fields, payment, timestamp, or rule | Render field errors without discarding valid form input |
-| `429` | Rate limit exceeded | Back off; never retry in a tight loop |
+| `429` | Rate limit exceeded | Wait at least `Retry-After` seconds; never retry in a tight loop |
 | `500+` | Temporary server failure | Preserve safe local UI state and offer a controlled retry |
 
 Do not automatically repeat start, deliver, or fail actions after an ambiguous
 network timeout. Refetch the delivery first and inspect its authoritative
 status. The exact same GPS payload may be retried because the backend detects
 duplicates using session, latitude, longitude, and `recorded_at`.
+
+Laravel's rate-limit response includes `Retry-After` in seconds. Parse it as a
+non-negative integer and wait at least that long, optionally adding small
+positive jitter. If it is missing or malformed, use a bounded exponential
+backoff rather than immediate retries. Coalesce duplicate read/refresh requests
+and cancel them when the screen closes. Keep state-changing actions user-driven;
+do not automatically replay start/deliver/fail just because a timer expires.
+`X-RateLimit-*` headers may describe the tightest currently applicable limiter,
+not a separate total for every endpoint.
+
+With debug disabled, a `500` response can be just `{"message":"Server Error"}`;
+do not require `data` or an `errors` object on every error response, and never
+display raw HTML, stack traces or internal exception text.
 
 ## 5. Authentication API
 
@@ -281,6 +341,7 @@ must require `data.user.role == "driver"`. If another role signs in, revoke the
 new token and show that the driver application requires a driver account.
 
 Login is limited to five attempts per minute per identifier/IP combination.
+An additional 20-attempt per-minute IP budget covers both API and portal login.
 Inactive, suspended, soft-deleted, profileless, or suspended-profile drivers
 receive the same generic invalid-credentials response.
 
@@ -552,9 +613,11 @@ POST /api/driver/deliveries/{delivery}/tracking-credentials
 
 The response contains a Firebase custom token, opaque delivery/session aliases,
 an exact database path, and an expiry. Keep it in memory, refresh it before
-expiry, and never persist or log it. Append each sample under the returned
-history session, then transactionally advance `live` only when its
-`recorded_at_ms`/`sequence` ordering is newer.
+expiry, and never persist or log it. Transactionally overwrite the single
+`live` child under that path only when its `recorded_at_ms`/`sequence` ordering
+is newer. Do not append history children or update `control`/`public_status`;
+the database rules reserve lifecycle changes to the server. See
+[Firebase tracking](firebase-realtime-tracking.md) for the existing transport.
 
 The following endpoint remains available for old builds and rollback:
 
@@ -782,10 +845,11 @@ driver API currently has no action that transitions into those statuses. If a
 mobile UI requires either action, add a tested Laravel endpoint first rather
 than faking the state in Flutter.
 
-Business cancellation is owner/admin controlled. Until a dedicated driver
-push mechanism is implemented, Flutter must reconcile delivery state whenever
-the app resumes, when connectivity returns, and after location submissions are
-rejected because tracking is no longer active.
+Business cancellation is owner/admin controlled. Firebase-mode clients observe
+the scoped lifecycle status and stop immediately on terminal state. Flutter
+must also reconcile delivery state whenever the app resumes, connectivity
+returns, or submissions are rejected because tracking is no longer active.
+Do not add periodic Laravel requests merely to detect cancellation.
 
 ## 15. Security checklist
 

@@ -12,6 +12,12 @@ always use built assets.
 
 ## Start a public development session
 
+Keep `APP_DEBUG=false` in the ignored local `.env` whenever using a public
+tunnel. If configuration was cached, use `php artisan config:clear` (not a
+Redis cache flush). A public development URL is reachable by strangers:
+use unique passwords, keep dependencies patched and stop the tunnel when idle.
+Never share passwords or public customer tokens in logs/screenshots.
+
 Build the frontend first:
 
 ```bash
@@ -36,6 +42,12 @@ Rebuild with `npm run build` after frontend changes that should appear through
 ngrok. Do not delete `public/hot`, open Vite publicly, or add wildcard CORS origins.
 Laravel's existing trusted-loopback proxy configuration preserves HTTPS form
 actions and asset URLs; it does not require trusting arbitrary proxies.
+
+The portal and customer pages use the same origin as their backend, so they do
+not need a CORS allowlist entry when ngrok changes. Native Flutter and Postman
+also do not require one. Only a deliberately separate browser client needs an
+exact `CORS_ALLOWED_ORIGINS` entry. Do not solve asset, mixed-content or offline
+tunnel problems with `*`, cookie CORS, or disabled CSRF.
 
 ## What this fix does not change
 

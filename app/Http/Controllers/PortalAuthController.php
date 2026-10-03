@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\PortalLoginRequest;
 use App\Models\User;
 use App\Services\ApiUserEligibility;
+use App\Services\PortalSessionSecurity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,8 @@ class PortalAuthController extends Controller
 
     public function store(
         PortalLoginRequest $request,
-        ApiUserEligibility $eligibility
+        ApiUserEligibility $eligibility,
+        PortalSessionSecurity $sessions
     ): RedirectResponse {
         $login = $request->validated('login');
         $user = User::query()
@@ -47,6 +49,7 @@ class PortalAuthController extends Controller
 
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
+        $sessions->remember($request, $user);
         $user->forceFill(['last_login_at' => now()])->save();
 
         return redirect()->intended(route('portal.deliveries.index'));

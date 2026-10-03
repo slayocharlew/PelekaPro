@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'security' => [
+        'api_ip_limit' => max(1, (int) env('PELEKAPRO_API_IP_LIMIT', 300)),
+        'api_user_limit' => max(1, (int) env('PELEKAPRO_API_USER_LIMIT', 120)),
+        'portal_user_limit' => max(1, (int) env('PELEKAPRO_PORTAL_USER_LIMIT', 120)),
+        'login_ip_limit' => max(1, (int) env('PELEKAPRO_LOGIN_IP_LIMIT', 20)),
+    ],
     'map_usage' => [
         // Planning target only; Google Cloud remains authoritative for quotas and billing.
         'monthly_web_load_target' => (int) env('PELEKAPRO_WEB_MAP_LOAD_TARGET', 10000),

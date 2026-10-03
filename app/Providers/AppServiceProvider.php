@@ -31,6 +31,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('api-ip', fn (Request $request) => Limit::perMinute((int) config('pelekapro.security.api_ip_limit'))
+            ->by(hash('sha256', 'api-ip|'.$request->ip()))
+            ->response(fn (Request $request, array $headers) => $this->trafficLimitResponse($headers)));
+
+        RateLimiter::for('api-user', fn (Request $request) => Limit::perMinute((int) config('pelekapro.security.api_user_limit'))
+            ->by(hash('sha256', 'api-user|'.$request->user()?->getAuthIdentifier()))
+            ->response(fn (Request $request, array $headers) => $this->trafficLimitResponse($headers)));
+
+        RateLimiter::for('portal-user', fn (Request $request) => Limit::perMinute((int) config('pelekapro.security.portal_user_limit'))
+            ->by(hash('sha256', 'portal-user|'.$request->user('web')?->getAuthIdentifier()))
+            ->response(fn (Request $request, array $headers) => $this->trafficLimitResponse($headers)));
+
         RateLimiter::for('map-usage', fn (Request $request) => Limit::perMinute(30)
             ->by(hash('sha256', 'map-usage|'.$request->ip())));
 
@@ -52,19 +64,25 @@ class AppServiceProvider extends ServiceProvider
         );
 
         RateLimiter::for('auth-login', function (Request $request) {
-            $identifier = mb_strtolower(trim((string) (
-                $request->input('phone')
+            $input = $request->input('phone')
                 ?? $request->input('email')
                 ?? $request->input('login')
-                ?? ''
-            )));
+                ?? '';
+            $identifier = is_string($input) ? mb_strtolower(trim($input)) : '';
 
-            return Limit::perMinute(5)
-                ->by(hash('sha256', $identifier.'|'.$request->ip()))
-                ->response(fn () => response()->json([
-                    'success' => false,
-                    'message' => 'Too many login attempts. Please try again later.',
-                ], 429));
+            $response = fn (Request $request, array $headers) => response()->json([
+                'success' => false,
+                'message' => 'Too many login attempts. Please try again later.',
+            ], 429, $headers)->header('Cache-Control', 'no-store, private');
+
+            return [
+                Limit::perMinute((int) config('pelekapro.security.login_ip_limit'))
+                    ->by(hash('sha256', 'login-ip|'.$request->ip()))
+                    ->response($response),
+                Limit::perMinute(5)
+                    ->by(hash('sha256', 'login-identifier|'.$identifier.'|'.$request->ip()))
+                    ->response($response),
+            ];
         });
 
         RateLimiter::for('driver-locations', function (Request $request) {
@@ -150,6 +168,14 @@ class AppServiceProvider extends ServiceProvider
         return response()->json([
             'message' => 'Too many tracking requests. Please try again later.',
         ], 429);
+    }
+
+    private function trafficLimitResponse(array $headers)
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Too many requests. Please try again later.',
+        ], 429, $headers)->header('Cache-Control', 'no-store, private');
     }
 
     private function deliveryRequestRateLimitResponse()

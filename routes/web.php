@@ -22,7 +22,7 @@ Route::middleware('guest:web')->group(function (): void {
         ->name('login.store');
 });
 
-Route::middleware(['auth:web', 'active.web.user', 'role:super_admin,business_owner,business_admin'])
+Route::middleware(['auth:web', 'active.web.user', 'portal.session', 'role:super_admin,business_owner,business_admin', 'throttle:portal-user'])
     ->prefix('portal')
     ->name('portal.')
     ->group(function (): void {

@@ -14,7 +14,7 @@ Route::post('auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:auth-login')
     ->name('auth.login');
 
-Route::middleware(['auth:sanctum', 'active.api.user'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'active.api.user', 'throttle:api-user'])->group(function (): void {
     Route::get('auth/me', [AuthController::class, 'me'])
         ->name('auth.me');
 

@@ -19,29 +19,33 @@ class AuthController extends Controller
     public function login(LoginRequest $request, ApiUserEligibility $eligibility): JsonResponse
     {
         $validated = $request->validated();
-        $user = $this->findUser($validated);
+        // Keep credential verification and issuance serialized with password rotation.
+        $login = DB::transaction(function () use ($validated, $eligibility) {
+            $user = $this->findUser($validated);
 
-        if (! $user
-            || ! is_string($user->password)
-            || ! Hash::check($validated['password'], $user->password)
-            || ! $eligibility->allows($user)
-        ) {
+            if (! $user
+                || ! is_string($user->password)
+                || ! Hash::check($validated['password'], $user->password)
+                || ! $eligibility->allows($user)
+            ) {
+                return null;
+            }
+
+            $user->forceFill(['last_login_at' => now()])->save();
+            $token = $user->createToken(
+                $user->isDriver() ? 'flutter-driver' : 'pelekapro-api',
+                $user->isDriver() ? ['driver-api'] : ['api'],
+                now()->addMinutes(max(1, (int) config('sanctum.expiration', 43200))),
+            );
+
+            return [$user, $token];
+        });
+
+        if ($login === null) {
             return $this->invalidCredentialsResponse();
         }
 
-        $expirationMinutes = max(1, (int) config('sanctum.expiration', 43200));
-        $tokenName = $user->isDriver() ? 'flutter-driver' : 'pelekapro-api';
-        $abilities = $user->isDriver() ? ['driver-api'] : ['api'];
-
-        $newAccessToken = DB::transaction(function () use ($user, $tokenName, $abilities, $expirationMinutes) {
-            $user->forceFill(['last_login_at' => now()])->save();
-
-            return $user->createToken(
-                $tokenName,
-                $abilities,
-                now()->addMinutes($expirationMinutes),
-            );
-        });
+        [$user, $newAccessToken] = $login;
 
         return response()->json([
             'success' => true,
@@ -102,7 +106,8 @@ class AuthController extends Controller
     {
         $query = User::query()
             ->withTrashed()
-            ->with(['role', 'driverProfile']);
+            ->with(['role', 'driverProfile'])
+            ->lockForUpdate();
 
         if (isset($validated['phone'])) {
             return $query->where('phone', $validated['phone'])->first();
